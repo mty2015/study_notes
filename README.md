@@ -1,3 +1,6 @@
-this is a demo a
+学习笔记
 ==========
-![Alt text](13.jpg)
+
+1. [netty](netty/list.md)
+2. spring
+3. lucence
