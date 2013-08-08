@@ -5,7 +5,7 @@
 3. lucence
 
 
-'''java
+```java
   private final ByteOrder defaultOrder;
 
     /**
@@ -15,4 +15,4 @@
     protected AbstractChannelBufferFactory() {
         this(ByteOrder.BIG_ENDIAN);
     }
-'''
+```
