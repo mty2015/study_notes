@@ -7,3 +7,10 @@ netty中ChannelBufferFactory的用于提供统一工厂接口来构造 `ChannelB
 ![directbuffer](images/directbuffer.png)
 
 #ChannelBuffer体系
+
+## `ChannelBuffer`和`java.nio.Buffer`的区别
+
+
+## 'ChannelBuffer' 的架构体系
+
+请补充图
