@@ -78,7 +78,7 @@ int main(int argc, char *argv[]){
 
 如果此时通过ls查看生成的文件属性：
 
-```sh
+```shell
 tony@tony:~/cstudy$ ls -lhs
 8.0K -rw-r--r-- 1 tony tony  17K  3月 22 23:04 file.data
 ```
