@@ -110,22 +110,66 @@ ssize_t write(int fileds, void *buf, sizt_t nbytes);
 
 ![多个进程操作一个文件](images/chapter3_2.png)
 
+### 原子操作
 
+如果这样一个场景：我们要往一个日志文件追加内容。如果有多个进程操作该日志文件，并发性会导致这个情况比较复杂。思考下面的代码的问题：
+```c
+lseek(fd, 0L, SEEK_END); //先定位到文件的末尾
+write(fd, buf, 100); //从文件末尾处开始写100字节的内容
+```
+这样这个操作就分解成了两个动作， `lseek`和`write`，这在并发场景中肯定会有问题，可能一个进程会覆盖另一个进程刚写的内容。Unix提供`O_APPEND`标志来支持这个原子操作。它会保证每次write之前偏移量都会设置到文件的最尾处，并保证这个原子性.
+```c
+fd = open(pathname, O_APPEND & O_RDWR)
+```
 
+### sync, fsync, fdatasync函数
 
+1. `sync`函数只是将所有修改过的缓冲区的排入写队列，然后就返回，它并不实际写磁盘
+1. `fsync`针对单个文件进行操作，它会立即把缓冲上的数据写入磁盘，然后再返回。这在一些数据库操作时很有必要，防止数据丢失。（`Redis`中的备份策略中有设置是否打开`fsync`选项）
+1. `fdatasync`和`fsync`类似。但是`fdatasync`只会影响数据部分。`fsync`还会同步文件属性
 
+### fcntl函数
+```c
+int fcntl(int fields, int cmd, ... /* arg */);
+```
+代码示例：
+```c
+int myFcntl(int argc, char *argv[]){
+    int val ;
 
+    if(argc != 2){
+        err_quit("usage: a.out <descriptor>");
+    }
 
+    if((val = fcntl(atoi(argv[1]), F_GETFL, 0)) < 0){
+        err_sys("fcntl error for fd %d", atoi(argv[1]));
+    }
 
+    switch(val & O_ACCMODE){
+        case O_RDONLY:
+            printf("read only");
+            break;
+        case O_WRONLY:
+            printf("write only");
+            break;
+        case O_RDWR:
+            printf("read write");
+            break;
+        default:
+            err_dump("unknow access mode");
+    }
 
+    if(val & O_APPEND){
+        printf(", append");
+    }
+    if(val & O_NONBLOCK){
+        printf(", nonblocking");
+    }
 
+    putchar('\n');
 
-
-
-
-
-
-
-
+    exit(0);
+}
+```
 
 
