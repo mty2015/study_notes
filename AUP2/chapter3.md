@@ -29,7 +29,7 @@ int close(int fileds);
 ```
 
 ### lseek函数
-** 每个打开的文件都有一个与其关联的当前文件偏移量(current file offset) **
+**每个打开的文件都有一个与其关联的当前文件偏移量(current file offset)**
 
 ```c
 #include <unistd.h>
@@ -83,6 +83,44 @@ tony@tony:~/cstudy$ ls -lhs
 8.0K -rw-r--r-- 1 tony tony  17K  3月 22 23:04 file.data
 ```
 可以看到文件的大小是17K，但是占据的存储空间(磁盘)才8K，这说明空洞数据不占据存储。
+
+### read函数
+```c
+ssize_t read(int filedes, void *buf, size_t nbytes);
+```
+如果遇到错误则返回-1
+
+### write函数
+```c
+ssize_t write(int fileds, void *buf, sizt_t nbytes);
+```
+若出错则返回-1
+
+### 内核对于所有的I/O数据结构
+
+![io内核结构](images/chapter3_1.png)
+
+说明几点：
+
+1. 每个进程都会有一张打开的文件描述表，如上面表中的最左边的表。里面每一个项就是记录了一个打开的文件描述。
+1. 每个文件描述项指向中间的文件表，里面有文件状态标志(如O_APPEND,O_WRONLY)，当前文件偏移量，指向该文件的v结点表项的指针
+1. 每个打开的文件都有一个v节点结构。
+
+如果有两个进程打开同样的一个文件。则每个进程都单独拥有自己的文件表项记录。因为每个进程都是独立操作文件的，拥有不用的当前偏移量。但是共享一个v结点信息表项。如图：
+
+![多个进程操作一个文件](images/chapter3_2.png)
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
