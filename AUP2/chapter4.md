@@ -66,6 +66,46 @@ mode_t umask(mode_t cmask);
 0100|用户执行
 ...|...
 
+### chown, fchown, lchown函数
+
+```c
+#include <unistd.h>
+int chown(const char *pathname, uid_t owner, gid_t group);
+int fchown(int fd, uid_t owner, gid_t group);
+int lchown(const char *pathname, uid_t owner, gid_t group);
+```
+
+**注意:** 如果`owner`或`group`为-1,则不更改之前的值.
+
+### 文件截短
+```c
+#include <unistd.h>
+int truncate(const char *pathname, off_t length);
+int ftruncate(int fd, off_t length);
+```
+这两个函数把现有文件截取到`length`长度的地方.
+
+### unix/linux文件系统结构
+
+当我们读取一个文件(目录也是一种文件类型)时要经过几步: 先根据文件名读取对应的`inode`节点编号, 再根据`inode编号`找到对应的`数据块`(data block)位置. 一篇通俗易懂的文章:[inode介绍](http://www.ruanyifeng.com/blog/2011/12/inode.html)
+
+### symlink和readlink函数
+
+```c
+#include <unistd.h>
+int symlink(const char *actualpath, const char *sympath);
+```
+
+对应于shell命令:`ln -s actualpath sympath`; 要注意的是actualpath可以并不存在.
+
+```c
+#include <unistd.h>
+ssize_t readlink(const char *pathname, char *buf, size_t bufsize);
+```
+因为open函数打开符号连接参数时,会跟踪到真实的目标文件去, 所以我们如果想读取符号连接本身的话, 可以调用这个函数. 它读取的内容就是该链接的`名字`. 
+
+
+
 
 
 
