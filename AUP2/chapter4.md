@@ -105,12 +105,30 @@ ssize_t readlink(const char *pathname, char *buf, size_t bufsize);
 因为open函数打开符号连接参数时,会跟踪到真实的目标文件去, 所以我们如果想读取符号连接本身的话, 可以调用这个函数. 它读取的内容就是该链接的`名字`. 
 
 
+### 文件的时间
 
+字段|说明|例子|ls(1)选项
+---|---|---|---
+st_atime|文件数据的最后访问时间|read|-u
+st_mtime|文件数据的最后修改时间|write|默认
+st_ctime|i结点状态的最后修改时间|chmod,chown|-c
 
+修改文件`最后访问`,`修改`时间:
+```c
+#include <utime.h>
+int utime(const char *pathname, const struct utimbuf *times);
+```
+如果times为空(`NULL`), 则设置为系统当前时间; 否之, 则取times中的值设置. 
 
+### chdir, fchdir, getcwd函数
 
-
-
+```c
+#include <unistd.h>
+int chdir(const char *pathname);
+int fchdir(int fd);
+char *getcwd(char *buf, size_t size);
+```
+`chdir`对应于shell的`cd`, `getcwd`对应于shell的`pwd`
 
 
 
