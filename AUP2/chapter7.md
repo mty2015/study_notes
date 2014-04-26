@@ -68,6 +68,52 @@ main is done
 ```
 执行的顺序和挂载的顺序是相反的.
 
+### C程序的存储空间布局
+![程序存储](images/chpater7_3.png)
 
+* 栈(stack). 自动变量及函数调用时所需要的信息都保存在这里. 函数的返回地址; 递归调用函数时, 每次都使用一个新的栈空间.
+* 堆(heap). 动态存储分配空间
+* 未初始化数据(bss). 函数外的任何声明, 但是未初始化数据. 内核会将数据初始化为0或者空指针. 如`long sum[1000]`
+* 初始化数据. 通常称为数据段, 包含程序中明确需要初始化值的变量. 如`int maxcount=99`
+* 正文段. 由cpu执行的机器指令.通常是共享的. 
+
+#### 存储器分配
+```c
+#include <stdlib.h>
+void *malloc(size_t size);
+void *calloc(size_t nobj, size_t size);
+void *realloc(void *ptr, size_t newsize);
+
+void free(void *ptr);
+```
+
+###环境变量
+每个程序启动时都会从内核中收到一张环境表(参考上图中,环境变量表存放在栈空间上面), 就像参数表一样. 放在environ变量中. 如下程序遍历所有的环境变量:
+```c
+extern char** environ; //外部系统预定义的环境表变量
+
+int main(int argc, char *argv[]){
+    for(int i = 0; environ[i] != NULL; i++){
+        printf("%s\n", environ[i]);
+    }
+}
+```
+
+#### 环境变量获取和设置函数
+```c
+#include <stdlib.h>
+char *getenv(const char *name);
+int putenv(char *nameValue);
+int setenv(const char *name, const char *value, /*1为覆盖,0为忽略*/int rewrite);
+int unsetenv(const char *name);
+```
+
+### setjmp和longjmp函数
+```c
+#include <setjmp.h>
+int setjmp(jmp_buf env);
+void longjmp(jmp_buf env, int val);
+```
+这两个函数一般成对出现,就像goto语句一样, 只是`goto`是函数内的跳转, 而`longjmp`是栈帧之间的跳转.
 
 
