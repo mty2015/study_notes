@@ -5,3 +5,4 @@
 1. [标准IO库](chapter5.md)
 1. 系统数据文件和信息
 1. [进程环境](chapter7.md)
+1. [进程控制](chapter8.md)
