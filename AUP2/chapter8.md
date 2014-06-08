@@ -53,7 +53,14 @@ after parent wirte, pos: 41
 ```
 可以看到, 虽然两个进程都拥有相同的文件描述符(代码中的变量`pid`), 但是同时进程相关流操作(lseek, write)还是基于同样的文件信息表数据. 这就是进程间的文件共享.
 
+### wait系列函数
+```c
+#include <sys/waith.h>
 
+pid_t wait(int *statloc);
+pid_t waitpid(pid_t pid, int *statloc, int options);
+waitid(idtype_t idtype, id_t id, siginfo_t *infop, int options);
+```
 
 
 
