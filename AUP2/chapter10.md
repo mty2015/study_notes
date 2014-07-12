@@ -103,13 +103,13 @@ int sigismember(const sigset_t *set, int signo);
 int sigprocmask(int how, const sigset_t *restrict set, sigset *restrict oset); // 成功返回0, 出错返回-1
 ```
 其中how的值可能为:
-|how|说明|
-|---|---|
-|SIG_BLOCK|添加屏蔽信号|
-|SIG_UNBLOCK|删除屏蔽信号|
-|SIG_SETMASK|重置屏蔽信号|
 
-# sigpending 函数
+how | 说明
+--- | --- | ---
+SIG_BLOCK | 添加屏蔽信号|
+SIG_UNBLOCK | 删除屏蔽信号
+SIG_SETMASK | 重置屏蔽信号
+
 
 
 
