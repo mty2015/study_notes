@@ -6,4 +6,6 @@
 
 1. `String[] listAll()`返回索引文件目录下的所有文件
 1. `IndexOutput createOutput(String name, IOContext context)`创建指定名称的新文件（这里再强调下，虽然我说了*文件*两字，但是不要直接理解成文件系统的文件）。注意返回的`IndexOutput`实例是非线程安全的，所以任何一个文件的写操作必需在一个线程内。
+1. `IndexInput openInput(String name, IOContext context)`和`createOutput`相反，读取索引文件。无论是IndexOutput还是IndexIntput，操作的都是索引文件最底层的数据，比如写入读取 int，string，不负责索引的编码协议之类，如B树结构，Lucene4x还是Lucene50格式。
+
 
