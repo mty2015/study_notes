@@ -1,6 +1,6 @@
 学习手记
 ==========
-1. [netty](netty/list.md)
-2. [spring](spring/index.md)
-3. [lucene](lucene/index.md)
-4. [AUP2](AUP2/index.md)
+1. [Netty](netty/list.md)
+2. [Spring](spring/index.md)
+3. [Lucene](lucene/index.md)
+4. [APUE](AUP2/index.md)
