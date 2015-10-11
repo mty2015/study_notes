@@ -23,5 +23,11 @@ Lucene索引文件具有有很高的吞吐量，官方描述如下：
 这得益于Lucene内部实现种种细节的性能优化手段，如可以并发索引，先缓存数据在内存再批量刷新到文件。下图是一个在执行`IndexWriter.addDocument`时调用栈图：
 ![新增索引文件](images/add_doc_seq.jpg)
 
-从上图可以看到，所有的索引操作任务都通过内部一个`DocumentsWriterFlushControl`来调度，它具体的工作就是根据计算机的硬件参数(如CPU核数，内存大小)来控制并发量，并决定何时把内存的数据刷回到持久层文件中。
+从上图可以看到，所有的索引操作任务都通过内部一个`DocumentsWriterFlushControl`来调度，它具体的工作就是根据计算机的硬件参数(如CPU核数，内存大小)来控制并发量，并决定何时把内存的数据刷回到持久层文件中。我们再从类的关系图看下：
+![IndexWriter关系图](images/dwpt.png)
+
+
+
+
+
 
