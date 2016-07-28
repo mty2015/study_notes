@@ -41,61 +41,40 @@ public abstract class TwoPhaseIterator {
   /** Return a {@link DocIdSetIterator} view of the provided
    *  {@link TwoPhaseIterator}. */
   public static DocIdSetIterator asDocIdSetIterator(TwoPhaseIterator twoPhaseIterator) {
-    return new TwoPhaseIteratorAsDocIdSetIterator(twoPhaseIterator);
-  }
+    final DocIdSetIterator approximation = twoPhaseIterator.approximation();
+    return new DocIdSetIterator() {
 
-  /**
-   * If the given {@link DocIdSetIterator} has been created with
-   * {@link #asDocIdSetIterator}, then this will return the wrapped
-   * {@link TwoPhaseIterator}. Otherwise this returns {@code null}.
-   */
-  public static TwoPhaseIterator unwrap(DocIdSetIterator iterator) {
-    if (iterator instanceof TwoPhaseIteratorAsDocIdSetIterator) {
-      return ((TwoPhaseIteratorAsDocIdSetIterator) iterator).twoPhaseIterator;
-    } else {
-      return null;
-    }
-  }
+      @Override
+      public int docID() {
+        return approximation.docID();
+      }
 
-  private static class TwoPhaseIteratorAsDocIdSetIterator extends DocIdSetIterator {
+      @Override
+      public int nextDoc() throws IOException {
+        return doNext(approximation.nextDoc());
+      }
 
-    final TwoPhaseIterator twoPhaseIterator;
-    final DocIdSetIterator approximation;
+      @Override
+      public int advance(int target) throws IOException {
+        return doNext(approximation.advance(target));
+      }
 
-    TwoPhaseIteratorAsDocIdSetIterator(TwoPhaseIterator twoPhaseIterator) {
-      this.twoPhaseIterator = twoPhaseIterator;
-      this.approximation = twoPhaseIterator.approximation;
-    }
-
-    @Override
-    public int docID() {
-      return approximation.docID();
-    }
-
-    @Override
-    public int nextDoc() throws IOException {
-      return doNext(approximation.nextDoc());
-    }
-
-    @Override
-    public int advance(int target) throws IOException {
-      return doNext(approximation.advance(target));
-    }
-
-    private int doNext(int doc) throws IOException {
-      for (;; doc = approximation.nextDoc()) {
-        if (doc == NO_MORE_DOCS) {
-          return NO_MORE_DOCS;
-        } else if (twoPhaseIterator.matches()) {
-          return doc;
+      private int doNext(int doc) throws IOException {
+        for (;; doc = approximation.nextDoc()) {
+          if (doc == NO_MORE_DOCS) {
+            return NO_MORE_DOCS;
+          } else if (twoPhaseIterator.matches()) {
+            return doc;
+          }
         }
       }
-    }
 
-    @Override
-    public long cost() {
-      return approximation.cost();
-    }
+      @Override
+      public long cost() {
+        return approximation.cost();
+      }
+
+    };
   }
 
   /** Return an approximation. The returned {@link DocIdSetIterator} is a

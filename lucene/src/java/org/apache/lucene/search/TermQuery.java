@@ -48,11 +48,13 @@ public class TermQuery extends Query {
     private final TermContext termStates;
     private final boolean needsScores;
 
-    public TermWeight(IndexSearcher searcher, boolean needsScores,
-        float boost, TermContext termStates) throws IOException {
+    public TermWeight(IndexSearcher searcher, boolean needsScores, TermContext termStates)
+        throws IOException {
       super(TermQuery.this);
       this.needsScores = needsScores;
       assert termStates != null : "TermContext must not be null";
+      // checked with a real exception in TermQuery constructor
+      assert termStates.hasOnlyRealTerms();
       this.termStates = termStates;
       this.similarity = searcher.getSimilarity(needsScores);
 
@@ -70,7 +72,7 @@ public class TermQuery extends Query {
         termStats = new TermStatistics(term.bytes(), docFreq, totalTermFreq);
       }
      
-      this.stats = similarity.computeWeight(boost, collectionStats, termStats);
+      this.stats = similarity.computeWeight(collectionStats, termStats);
     }
 
     @Override
@@ -81,6 +83,16 @@ public class TermQuery extends Query {
     @Override
     public String toString() {
       return "weight(" + TermQuery.this + ")";
+    }
+
+    @Override
+    public float getValueForNormalization() {
+      return stats.getValueForNormalization();
+    }
+
+    @Override
+    public void normalize(float queryNorm, float boost) {
+      stats.normalize(queryNorm, boost);
     }
 
     @Override
@@ -154,6 +166,12 @@ public class TermQuery extends Query {
   public TermQuery(Term t, TermContext states) {
     assert states != null;
     term = Objects.requireNonNull(t);
+    if (states.hasOnlyRealTerms() == false) {
+      // The reason for this is that fake terms might have the same bytes as
+      // real terms, and this confuses query caching because they don't match
+      // the same documents
+      throw new IllegalArgumentException("Term queries must be created on real terms");
+    }
     perReaderTermState = Objects.requireNonNull(states);
   }
 
@@ -163,7 +181,7 @@ public class TermQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
     final IndexReaderContext context = searcher.getTopReaderContext();
     final TermContext termState;
     if (perReaderTermState == null
@@ -176,7 +194,7 @@ public class TermQuery extends Query {
       termState = this.perReaderTermState;
     }
 
-    return new TermWeight(searcher, needsScores, boost, termState);
+    return new TermWeight(searcher, needsScores, termState);
   }
 
   /** Prints a user-readable version of this query. */

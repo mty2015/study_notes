@@ -18,10 +18,15 @@ package org.apache.lucene.search;
 
 import java.io.IOException;
 import java.util.AbstractCollection;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
+
 import org.apache.lucene.document.IntPoint;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.LeafReader;
@@ -31,6 +36,7 @@ import org.apache.lucene.index.PointValues.Relation;
 import org.apache.lucene.index.PointValues;
 import org.apache.lucene.index.PrefixCodedTerms.TermIterator;
 import org.apache.lucene.index.PrefixCodedTerms;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.BytesRefIterator;
@@ -106,12 +112,12 @@ public abstract class PointInSetQuery extends Query {
   }
 
   @Override
-  public final Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  public final Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
 
     // We don't use RandomAccessWeight here: it's no good to approximate with "match all docs".
     // This is an inverted structure and should be used in the first pass:
 
-    return new ConstantScoreWeight(this, boost) {
+    return new ConstantScoreWeight(this) {
 
       @Override
       public Scorer scorer(LeafReaderContext context) throws IOException {

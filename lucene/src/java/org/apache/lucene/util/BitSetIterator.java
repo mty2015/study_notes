@@ -62,19 +62,9 @@ public class BitSetIterator extends DocIdSetIterator {
     this.cost = cost;
   }
 
-  /** Return the wrapped {@link BitSet}. */
-  public BitSet getBitSet() {
-    return bits;
-  }
-
   @Override
   public int docID() {
     return doc;
-  }
-
-  /** Set the current doc id that this iterator is on. */
-  public void setDocId(int docId) {
-    this.doc = docId;
   }
 
   @Override

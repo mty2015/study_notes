@@ -28,7 +28,6 @@ import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PointsReader;
 import org.apache.lucene.codecs.StoredFieldsReader;
 import org.apache.lucene.codecs.TermVectorsReader;
-import org.apache.lucene.search.Sort;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.util.Bits;
@@ -52,9 +51,6 @@ public final class SegmentReader extends CodecReader {
 
   final SegmentCoreReaders core;
   final SegmentDocValues segDocValues;
-
-  /** True if we are holding RAM only liveDocs or DV updates, i.e. the SegmentCommitInfo delGen doesn't match our liveDocs. */
-  final boolean isNRT;
   
   final DocValuesProducer docValuesProducer;
   final FieldInfos fieldInfos;
@@ -67,10 +63,6 @@ public final class SegmentReader extends CodecReader {
   // TODO: why is this public?
   public SegmentReader(SegmentCommitInfo si, IOContext context) throws IOException {
     this.si = si;
-
-    // We pull liveDocs/DV updates from disk:
-    this.isNRT = false;
-    
     core = new SegmentCoreReaders(si.info.dir, si, context);
     segDocValues = new SegmentDocValues();
     
@@ -107,8 +99,8 @@ public final class SegmentReader extends CodecReader {
    *  deletes file.  Used by openIfChanged. */
   SegmentReader(SegmentCommitInfo si, SegmentReader sr) throws IOException {
     this(si, sr,
-         si.hasDeletions() ? si.info.getCodec().liveDocsFormat().readLiveDocs(si.info.dir, si, IOContext.READONCE) : null,
-         si.info.maxDoc() - si.getDelCount(), false);
+         si.info.getCodec().liveDocsFormat().readLiveDocs(si.info.dir, si, IOContext.READONCE),
+         si.info.maxDoc() - si.getDelCount());
   }
 
   /** Create new SegmentReader sharing core from a previous
@@ -116,13 +108,6 @@ public final class SegmentReader extends CodecReader {
    *  liveDocs.  Used by IndexWriter to provide a new NRT
    *  reader */
   SegmentReader(SegmentCommitInfo si, SegmentReader sr, Bits liveDocs, int numDocs) throws IOException {
-    this(si, sr, liveDocs, numDocs, true);
-  }
-    
-  /** Create new SegmentReader sharing core from a previous
-   *  SegmentReader and using the provided liveDocs, and recording
-   *  whether those liveDocs were carried in ram (isNRT=true). */
-  SegmentReader(SegmentCommitInfo si, SegmentReader sr, Bits liveDocs, int numDocs, boolean isNRT) throws IOException {
     if (numDocs > si.info.maxDoc()) {
       throw new IllegalArgumentException("numDocs=" + numDocs + " but maxDoc=" + si.info.maxDoc());
     }
@@ -131,7 +116,6 @@ public final class SegmentReader extends CodecReader {
     }
     this.si = si;
     this.liveDocs = liveDocs;
-    this.isNRT = isNRT;
     this.numDocs = numDocs;
     this.core = sr.core;
     core.incRef();
@@ -318,10 +302,5 @@ public final class SegmentReader extends CodecReader {
   public void removeCoreClosedListener(CoreClosedListener listener) {
     ensureOpen();
     core.removeCoreClosedListener(listener);
-  }
-
-  @Override
-  public Sort getIndexSort() {
-    return si.info.getIndexSort();
   }
 }

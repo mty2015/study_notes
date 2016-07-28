@@ -212,7 +212,7 @@ public final class BinaryPoint extends Field {
 
     if (bytesPerDim == -1) {
       // There are no points, and we cannot guess the bytesPerDim here, so we return an equivalent query:
-      return new MatchNoDocsQuery("empty BinaryPoint.newSetQuery");
+      return new MatchNoDocsQuery();
     }
 
     // Don't unexpectedly change the user's incoming values array:

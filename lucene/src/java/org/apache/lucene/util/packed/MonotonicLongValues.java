@@ -22,6 +22,7 @@ import java.util.Arrays;
 import static org.apache.lucene.util.packed.MonotonicBlockPackedReader.expected;
 
 import org.apache.lucene.util.RamUsageEstimator;
+import org.apache.lucene.util.packed.DeltaPackedLongValues.Builder;
 import org.apache.lucene.util.packed.PackedInts.Reader;
 
 class MonotonicLongValues extends DeltaPackedLongValues {

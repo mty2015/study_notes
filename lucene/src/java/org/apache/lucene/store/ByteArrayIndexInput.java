@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -15,9 +17,9 @@
  * limitations under the License.
  */
 
-package org.apache.lucene.store;
-
 import java.io.IOException;
+
+import org.apache.lucene.util.BytesRef;
 
 /** 
  * DataInput backed by a byte array.

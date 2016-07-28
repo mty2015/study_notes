@@ -171,13 +171,14 @@ class DocumentsWriterPerThread {
     this.pendingNumDocs = pendingNumDocs;
     bytesUsed = Counter.newCounter();
     byteBlockAllocator = new DirectTrackingAllocator(bytesUsed);
-    pendingUpdates = new BufferedUpdates(segmentName);
+    pendingUpdates = new BufferedUpdates();
     intBlockAllocator = new IntBlockAllocator(bytesUsed);
     this.deleteQueue = deleteQueue;
     assert numDocsInRAM == 0 : "num docs " + numDocsInRAM;
+    pendingUpdates.clear();
     deleteSlice = deleteQueue.newSlice();
    
-    segmentInfo = new SegmentInfo(directoryOrig, Version.LATEST, segmentName, -1, false, codec, Collections.emptyMap(), StringHelper.randomId(), new HashMap<>(), null);
+    segmentInfo = new SegmentInfo(directoryOrig, Version.LATEST, segmentName, -1, false, codec, Collections.emptyMap(), StringHelper.randomId(), new HashMap<>());
     assert numDocsInRAM == 0;
     if (INFO_VERBOSE && infoStream.isEnabled("DWPT")) {
       infoStream.message("DWPT", Thread.currentThread().getName() + " init seg=" + segmentName + " delQueue=" + deleteQueue);  
@@ -209,7 +210,7 @@ class DocumentsWriterPerThread {
     }
   }
 
-  public long updateDocument(Iterable<? extends IndexableField> doc, Analyzer analyzer, Term delTerm) throws IOException, AbortingException {
+  public void updateDocument(Iterable<? extends IndexableField> doc, Analyzer analyzer, Term delTerm) throws IOException, AbortingException {
     testPoint("DocumentsWriterPerThread addDocument start");
     assert deleteQueue != null;
     reserveOneDoc();
@@ -240,11 +241,10 @@ class DocumentsWriterPerThread {
         numDocsInRAM++;
       }
     }
-
-    return finishDocument(delTerm);
+    finishDocument(delTerm);
   }
 
-  public long updateDocuments(Iterable<? extends Iterable<? extends IndexableField>> docs, Analyzer analyzer, Term delTerm) throws IOException, AbortingException {
+  public int updateDocuments(Iterable<? extends Iterable<? extends IndexableField>> docs, Analyzer analyzer, Term delTerm) throws IOException, AbortingException {
     testPoint("DocumentsWriterPerThread addDocuments start");
     assert deleteQueue != null;
     docState.analyzer = analyzer;
@@ -278,31 +278,18 @@ class DocumentsWriterPerThread {
             numDocsInRAM++;
           }
         }
-
-        numDocsInRAM++;
+        finishDocument(null);
       }
       allDocsIndexed = true;
 
       // Apply delTerm only after all indexing has
       // succeeded, but apply it only to docs prior to when
       // this batch started:
-      long seqNo;
       if (delTerm != null) {
-        seqNo = deleteQueue.add(delTerm, deleteSlice);
+        deleteQueue.add(delTerm, deleteSlice);
         assert deleteSlice.isTailItem(delTerm) : "expected the delete term as the tail item";
         deleteSlice.apply(pendingUpdates, numDocsInRAM-docCount);
-        return seqNo;
-      } else {
-        seqNo = deleteQueue.updateSlice(deleteSlice);
-        if (seqNo < 0) {
-          seqNo = -seqNo;
-          deleteSlice.apply(pendingUpdates, numDocsInRAM-docCount);
-        } else {
-          deleteSlice.reset();
-        }
       }
-
-      return seqNo;
 
     } finally {
       if (!allDocsIndexed && !aborted) {
@@ -317,9 +304,11 @@ class DocumentsWriterPerThread {
       }
       docState.clear();
     }
+
+    return docCount;
   }
   
-  private long finishDocument(Term delTerm) {
+  private void finishDocument(Term delTerm) {
     /*
      * here we actually finish the document in two steps 1. push the delete into
      * the queue and update our slice. 2. increment the DWPT private document
@@ -329,18 +318,11 @@ class DocumentsWriterPerThread {
      * since we updated the slice the last time.
      */
     boolean applySlice = numDocsInRAM != 0;
-    long seqNo;
     if (delTerm != null) {
-      seqNo = deleteQueue.add(delTerm, deleteSlice);
+      deleteQueue.add(delTerm, deleteSlice);
       assert deleteSlice.isTailItem(delTerm) : "expected the delete term as the tail item";
     } else  {
-      seqNo = deleteQueue.updateSlice(deleteSlice);
-      
-      if (seqNo < 0) {
-        seqNo = -seqNo;
-      } else {
-        applySlice = false;
-      }
+      applySlice &= deleteQueue.updateSlice(deleteSlice);
     }
     
     if (applySlice) {
@@ -349,8 +331,6 @@ class DocumentsWriterPerThread {
       deleteSlice.reset();
     }
     ++numDocsInRAM;
-
-    return seqNo;
   }
 
   // Buffer a specific docID for deletion. Currently only

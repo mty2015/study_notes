@@ -76,6 +76,7 @@ public abstract class PointsWriter implements Closeable {
                      }
 
                      MergeState.DocMap docMap = mergeState.docMaps[i];
+                     int docBase = mergeState.docBase[i];
                      pointsReader.intersect(fieldInfo.name,
                                             new IntersectVisitor() {
                                               @Override
@@ -89,7 +90,7 @@ public abstract class PointsWriter implements Closeable {
                                                 int newDocID = docMap.get(docID);
                                                 if (newDocID != -1) {
                                                   // Not deleted:
-                                                  mergedVisitor.visit(newDocID, packedValue);
+                                                  mergedVisitor.visit(docBase + newDocID, packedValue);
                                                 }
                                               }
 

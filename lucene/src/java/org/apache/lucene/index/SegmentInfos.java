@@ -17,20 +17,6 @@
 package org.apache.lucene.index;
 
 
-import java.io.IOException;
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map.Entry;
-import java.util.Map;
-import java.util.Set;
-
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.DocValuesFormat;
@@ -45,6 +31,20 @@ import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.StringHelper;
 import org.apache.lucene.util.Version;
+
+import java.io.IOException;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map.Entry;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * A collection of segmentInfo objects with methods for operating on those
@@ -103,7 +103,7 @@ import org.apache.lucene.util.Version;
  * <li>SegID is the identifier of the Codec that encoded this segment. </li>
  * <li>CommitUserData stores an optional user-supplied opaque
  * Map&lt;String,String&gt; that was passed to
- * {@link IndexWriter#setLiveCommitData(Iterable)}.</li>
+ * {@link IndexWriter#setCommitData(java.util.Map)}.</li>
  * <li>FieldInfosGen is the generation count of the fieldInfos file. If this is
  * -1, there are no updates to the fieldInfos in that segment. Anything above
  * zero means there are updates to fieldInfos stored by {@link FieldInfosFormat}
@@ -304,12 +304,11 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
     infos.generation = generation;
     infos.lastGeneration = generation;
     if (format >= VERSION_53) {
+      // TODO: in the future (7.0?  sigh) we can use this to throw IndexFormatTooOldException ... or just rely on the
+      // minSegmentLuceneVersion check instead:
       infos.luceneVersion = Version.fromBits(input.readVInt(), input.readVInt(), input.readVInt());
-      if (infos.luceneVersion.onOrAfter(Version.LUCENE_6_0_0) == false) {
-        throw new IndexFormatTooOldException(input, "this index is too old (version: " + infos.luceneVersion + ")");
-      }
     } else {
-      throw new IndexFormatTooOldException(input, "this index segments file is too old (segment infos format: " + format + ")");
+      // else compute the min version down below in the for loop
     }
 
     infos.version = input.readLong();
@@ -320,10 +319,18 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
       throw new CorruptIndexException("invalid segment count: " + numSegments, input);
     }
 
-    if (numSegments > 0) {
-      infos.minSegmentLuceneVersion = Version.fromBits(input.readVInt(), input.readVInt(), input.readVInt());
+    if (format >= VERSION_53) {
+      if (numSegments > 0) {
+        infos.minSegmentLuceneVersion = Version.fromBits(input.readVInt(), input.readVInt(), input.readVInt());
+        if (infos.minSegmentLuceneVersion.onOrAfter(Version.LUCENE_5_0_0) == false) {
+          throw new IndexFormatTooOldException(input, "this index contains a too-old segment (version: " + infos.minSegmentLuceneVersion + ")");
+        }
+      } else {
+        // else leave as null: no segments
+      }
     } else {
-      // else leave as null: no segments
+      // else we recompute it below as we visit segments; it can't be used for throwing IndexFormatTooOldExc, but consumers of
+      // SegmentInfos can maybe still use it for other reasons
     }
 
     long totalDocs = 0;
@@ -375,8 +382,11 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
       infos.add(siPerCommit);
 
       Version segmentVersion = info.getVersion();
-
-      if (segmentVersion.onOrAfter(infos.minSegmentLuceneVersion) == false) {
+      if (format < VERSION_53) {
+        if (infos.minSegmentLuceneVersion == null || segmentVersion.onOrAfter(infos.minSegmentLuceneVersion) == false) {
+          infos.minSegmentLuceneVersion = segmentVersion;
+        }
+      } else if (segmentVersion.onOrAfter(infos.minSegmentLuceneVersion) == false) {
         throw new CorruptIndexException("segments file recorded minSegmentLuceneVersion=" + infos.minSegmentLuceneVersion + " but segment=" + info + " has older version=" + segmentVersion, input);
       }
     }
@@ -443,7 +453,7 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
     String segmentFileName = IndexFileNames.fileNameFromGeneration(IndexFileNames.PENDING_SEGMENTS,
                                                                    "",
                                                                    nextGeneration);
-
+    
     // Always advance the generation on write:
     generation = nextGeneration;
     
@@ -788,8 +798,7 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
     try {
       final String src = IndexFileNames.fileNameFromGeneration(IndexFileNames.PENDING_SEGMENTS, "", generation);
       dest = IndexFileNames.fileNameFromGeneration(IndexFileNames.SEGMENTS, "", generation);
-      dir.rename(src, dest);
-      dir.syncMetaData();
+      dir.renameFile(src, dest);
       success = true;
     } finally {
       if (!success) {

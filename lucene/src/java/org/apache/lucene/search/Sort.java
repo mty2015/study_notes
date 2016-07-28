@@ -147,9 +147,6 @@ public class Sort {
    *  etc.  Finally, if there is still a tie after all SortFields
    *  are checked, the internal Lucene docid is used to break it. */
   public void setSort(SortField... fields) {
-    if (fields.length == 0) {
-      throw new IllegalArgumentException("There must be at least 1 sort field");
-    }
     this.fields = fields;
   }
   

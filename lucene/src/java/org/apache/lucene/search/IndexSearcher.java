@@ -87,8 +87,18 @@ public class IndexSearcher {
     }
 
     @Override
-    public SimWeight computeWeight(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
-      return new SimWeight() {};
+    public SimWeight computeWeight(CollectionStatistics collectionStats, TermStatistics... termStats) {
+      return new SimWeight() {
+
+        @Override
+        public float getValueForNormalization() {
+          return 1f;
+        }
+
+        @Override
+        public void normalize(float queryNorm, float boost) {}
+
+      };
     }
 
     @Override
@@ -722,7 +732,14 @@ public class IndexSearcher {
    */
   public Weight createNormalizedWeight(Query query, boolean needsScores) throws IOException {
     query = rewrite(query);
-    return createWeight(query, needsScores, 1f);
+    Weight weight = createWeight(query, needsScores);
+    float v = weight.getValueForNormalization();
+    float norm = getSimilarity(needsScores).queryNorm(v);
+    if (Float.isInfinite(norm) || Float.isNaN(norm)) {
+      norm = 1.0f;
+    }
+    weight.normalize(norm, 1.0f);
+    return weight;
   }
 
   /**
@@ -730,9 +747,9 @@ public class IndexSearcher {
    * if possible and configured.
    * @lucene.experimental
    */
-  public Weight createWeight(Query query, boolean needsScores, float boost) throws IOException {
+  public Weight createWeight(Query query, boolean needsScores) throws IOException {
     final QueryCache queryCache = this.queryCache;
-    Weight weight = query.createWeight(this, needsScores, boost);
+    Weight weight = query.createWeight(this, needsScores);
     if (needsScores == false && queryCache != null) {
       weight = queryCache.doCache(weight, queryCachingPolicy);
     }
@@ -802,7 +819,6 @@ public class IndexSearcher {
       sumTotalTermFreq = terms.getSumTotalTermFreq();
       sumDocFreq = terms.getSumDocFreq();
     }
-
     return new CollectionStatistics(field, reader.maxDoc(), docCount, sumTotalTermFreq, sumDocFreq);
   }
 }

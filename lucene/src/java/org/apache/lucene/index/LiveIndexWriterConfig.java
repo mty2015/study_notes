@@ -23,7 +23,6 @@ import org.apache.lucene.index.DocumentsWriterPerThread.IndexingChain;
 import org.apache.lucene.index.IndexWriter.IndexReaderWarmer;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.util.InfoStream;
 
@@ -94,9 +93,6 @@ public class LiveIndexWriterConfig {
   
   /** True if calls to {@link IndexWriter#close()} should first do a commit. */
   protected boolean commitOnClose = IndexWriterConfig.DEFAULT_COMMIT_ON_CLOSE;
-
-  /** The sort order to use to write merged segments. */
-  protected Sort indexSort = null;
 
   // used by IndexWriterConfig
   LiveIndexWriterConfig(Analyzer analyzer) {
@@ -449,14 +445,6 @@ public class LiveIndexWriterConfig {
     return commitOnClose;
   }
 
-  /**
-   * Set the index-time {@link Sort} order. Merged segments will be written
-   * in this order.
-   */
-  public Sort getIndexSort() {
-    return indexSort;
-  }
-
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
@@ -479,7 +467,6 @@ public class LiveIndexWriterConfig {
     sb.append("perThreadHardLimitMB=").append(getRAMPerThreadHardLimitMB()).append("\n");
     sb.append("useCompoundFile=").append(getUseCompoundFile()).append("\n");
     sb.append("commitOnClose=").append(getCommitOnClose()).append("\n");
-    sb.append("indexSort=").append(getIndexSort()).append("\n");
     return sb.toString();
   }
 }

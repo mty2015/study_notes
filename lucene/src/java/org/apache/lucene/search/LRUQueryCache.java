@@ -40,8 +40,6 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.index.TieredMergePolicy;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.Accountables;
-import org.apache.lucene.util.BitDocIdSet;
-import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.RoaringDocIdSet;
 
@@ -504,39 +502,9 @@ public class LRUQueryCache implements QueryCache, Accountable {
   }
 
   /**
-   * Default cache implementation: uses {@link RoaringDocIdSet} for sets that
-   * have a density &lt; 1% and a {@link BitDocIdSet} over a {@link FixedBitSet}
-   * otherwise.
+   * Default cache implementation: uses {@link RoaringDocIdSet}.
    */
   protected DocIdSet cacheImpl(BulkScorer scorer, int maxDoc) throws IOException {
-    if (scorer.cost() * 100 >= maxDoc) {
-      // FixedBitSet is faster for dense sets and will enable the random-access
-      // optimization in ConjunctionDISI
-      return cacheIntoBitSet(scorer, maxDoc);
-    } else {
-      return cacheIntoRoaringDocIdSet(scorer, maxDoc);
-    }
-  }
-
-  private static DocIdSet cacheIntoBitSet(BulkScorer scorer, int maxDoc) throws IOException {
-    final FixedBitSet bitSet = new FixedBitSet(maxDoc);
-    long cost[] = new long[1];
-    scorer.score(new LeafCollector() {
-
-      @Override
-      public void setScorer(Scorer scorer) throws IOException {}
-
-      @Override
-      public void collect(int doc) throws IOException {
-        cost[0]++;
-        bitSet.set(doc);
-      }
-
-    }, null);
-    return new BitDocIdSet(bitSet, cost[0]);
-  }
-
-  private static DocIdSet cacheIntoRoaringDocIdSet(BulkScorer scorer, int maxDoc) throws IOException {
     RoaringDocIdSet.Builder builder = new RoaringDocIdSet.Builder(maxDoc);
     scorer.score(new LeafCollector() {
 
@@ -688,7 +656,7 @@ public class LRUQueryCache implements QueryCache, Accountable {
     private final AtomicBoolean used;
 
     CachingWrapperWeight(Weight in, QueryCachingPolicy policy) {
-      super(in.getQuery(), 1f);
+      super(in.getQuery());
       this.in = in;
       this.policy = policy;
       used = new AtomicBoolean(false);

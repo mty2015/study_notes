@@ -25,11 +25,13 @@ import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.PostingsWriterBase;
+import org.apache.lucene.codecs.blocktree.AutoPrefixTermsWriter.PrefixTerm;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.IndexFileNames;
 import org.apache.lucene.index.IndexOptions;
+import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
@@ -88,6 +90,15 @@ import org.apache.lucene.util.packed.PackedInts;
  * between two index terms.
  * <p>
  *
+ * If {@code minItemsInAutoPrefix} is not zero, then for
+ * {@link IndexOptions#DOCS} fields we detect prefixes that match
+ * "enough" terms and insert auto-prefix terms into the index, which are
+ * used by {@link Terms#intersect}  at search time to speed up prefix
+ * and range queries.  Besides {@link Terms#intersect}, these
+ * auto-prefix terms are invisible to all other APIs (don't change terms
+ * stats, don't show up in normal {@link TermsEnum}s, etc.).
+ * <p>
+ *
  * Files:
  * <ul>
  *   <li><tt>.tim</tt>: <a href="#Termdictionary">Term Dictionary</a></li>
@@ -113,7 +124,7 @@ import org.apache.lucene.util.packed.PackedInts;
  * and decoding the Postings Metadata and Term Metadata sections.</p>
  *
  * <ul>
- *    <li>TermsDict (.tim) --&gt; Header, <i>PostingsHeader</i>, NodeBlock<sup>NumBlocks</sup>,
+ *    <li>TermsDict (.tim) --&gt; Header, HasAutoPrefixTerms, <i>PostingsHeader</i>, NodeBlock<sup>NumBlocks</sup>,
  *                               FieldSummary, DirOffset, Footer</li>
  *    <li>NodeBlock --&gt; (OuterNode | InnerNode)</li>
  *    <li>OuterNode --&gt; EntryCount, SuffixLength, Byte<sup>SuffixLength</sup>, StatsLength, &lt; TermStats &gt;<sup>EntryCount</sup>, MetaLength, &lt;<i>TermMetadata</i>&gt;<sup>EntryCount</sup></li>
@@ -134,6 +145,7 @@ import org.apache.lucene.util.packed.PackedInts;
  * <ul>
  *    <li>Header is a {@link CodecUtil#writeHeader CodecHeader} storing the version information
  *        for the BlockTree implementation.</li>
+ *    <li>HasAutoPrefixTerms is a single byte; 1 means there may be auto-prefix terms and 0 means there are none.
  *    <li>DirOffset is a pointer to the FieldSummary section.</li>
  *    <li>DocFreq is the count of documents which contain the term.</li>
  *    <li>TotalTermFreq is the total number of occurrences of the term. This is encoded
@@ -211,6 +223,8 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
   final int maxDoc;
   final int minItemsInBlock;
   final int maxItemsInBlock;
+  final int minItemsInAutoPrefix;
+  final int maxItemsInAutoPrefix;
 
   final PostingsWriterBase postingsWriter;
   final FieldInfos fieldInfos;
@@ -246,14 +260,43 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
 
   private final List<FieldMetaData> fields = new ArrayList<>();
 
-  /** Create a new writer.  The number of items (terms or
-   *  sub-blocks) per block will aim to be between
-   *  minItemsPerBlock and maxItemsPerBlock, though in some
-   *  cases the blocks may be smaller than the min. */
+  // private final String segment;
+  final FixedBitSet prefixDocs;
+
+  /** Reused in getAutoPrefixTermsEnum: */
+  final BitSetTermsEnum prefixFixedBitsTermsEnum;
+
+  /** Reused in getAutoPrefixTermsEnum: */
+  private TermsEnum prefixTermsEnum;
+
+  /** Reused in getAutoPrefixTermsEnum: */
+  private PostingsEnum prefixDocsEnum;
+
+  /** Create a new writer, using default values for auto-prefix terms. */
   public BlockTreeTermsWriter(SegmentWriteState state,
                               PostingsWriterBase postingsWriter,
                               int minItemsInBlock,
-                              int maxItemsInBlock)
+                              int maxItemsInBlock) throws IOException {
+    this(state, postingsWriter, minItemsInBlock, maxItemsInBlock, 0, 0);
+  }
+
+  /** Create a new writer.  The number of items (terms or
+   *  sub-blocks) per block will aim to be between
+   *  minItemsPerBlock and maxItemsPerBlock, though in some
+   *  cases the blocks may be smaller than the min.
+   *  For DOCS_ONLY fields, this terms dictionary will
+   *  insert automatically generated prefix terms for common
+   *  prefixes, as long as each prefix matches at least
+   *  {@code minItemsInAutoPrefix} other terms or prefixes,
+   *  and at most {@code maxItemsInAutoPrefix} other terms
+   *  or prefixes.  Set {@code minItemsInAutoPrefix} to 0
+   *  to disable auto-prefix terms. */
+  public BlockTreeTermsWriter(SegmentWriteState state,
+                              PostingsWriterBase postingsWriter,
+                              int minItemsInBlock,
+                              int maxItemsInBlock,
+                              int minItemsInAutoPrefix,
+                              int maxItemsInAutoPrefix)
     throws IOException
   {
     validateSettings(minItemsInBlock,
@@ -261,6 +304,21 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
 
     this.minItemsInBlock = minItemsInBlock;
     this.maxItemsInBlock = maxItemsInBlock;
+
+    validateAutoPrefixSettings(minItemsInAutoPrefix,
+                               maxItemsInAutoPrefix);
+
+    if (minItemsInAutoPrefix != 0) {
+      // TODO: can we used compressed bitset instead?  that auto-upgrades if it's dense enough...
+      prefixDocs = new FixedBitSet(state.segmentInfo.maxDoc());
+      prefixFixedBitsTermsEnum = new BitSetTermsEnum(prefixDocs);
+    } else {
+      prefixDocs = null;
+      prefixFixedBitsTermsEnum = null;
+    }
+
+    this.minItemsInAutoPrefix = minItemsInAutoPrefix;
+    this.maxItemsInAutoPrefix = maxItemsInAutoPrefix;
 
     this.maxDoc = state.segmentInfo.maxDoc();
     this.fieldInfos = state.fieldInfos;
@@ -273,6 +331,13 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
     try {
       CodecUtil.writeIndexHeader(termsOut, BlockTreeTermsReader.TERMS_CODEC_NAME, BlockTreeTermsReader.VERSION_CURRENT,
                                  state.segmentInfo.getId(), state.segmentSuffix);
+
+      // So at read time we know, globally, that there will be no auto-prefix terms:
+      if (minItemsInAutoPrefix == 0) {
+        termsOut.writeByte((byte) 0);
+      } else {
+        termsOut.writeByte((byte) 1);
+      }
 
       final String indexName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, BlockTreeTermsReader.TERMS_INDEX_EXTENSION);
       indexOut = state.directory.createOutput(indexName, state.context);
@@ -315,6 +380,25 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
     }
   }
 
+  /** Throws {@code IllegalArgumentException} if any of these settings
+   *  is invalid. */
+  public static void validateAutoPrefixSettings(int minItemsInAutoPrefix,
+                                                int maxItemsInAutoPrefix) {
+    if (minItemsInAutoPrefix != 0) {
+      if (minItemsInAutoPrefix < 2) {
+        throw new IllegalArgumentException("minItemsInAutoPrefix must be at least 2; got minItemsInAutoPrefix=" + minItemsInAutoPrefix);
+      }
+      if (minItemsInAutoPrefix > maxItemsInAutoPrefix) {
+        throw new IllegalArgumentException("maxItemsInAutoPrefix must be >= minItemsInAutoPrefix; got maxItemsInAutoPrefix=" + maxItemsInAutoPrefix + " minItemsInAutoPrefix=" + minItemsInAutoPrefix);
+      }
+      if (2*(minItemsInAutoPrefix-1) > maxItemsInAutoPrefix) {
+        throw new IllegalArgumentException("maxItemsInAutoPrefix must be at least 2*(minItemsInAutoPrefix-1); got maxItemsInAutoPrefix=" + maxItemsInAutoPrefix + " minItemsInAutoPrefix=" + minItemsInAutoPrefix);
+      }
+    } else if (maxItemsInAutoPrefix != 0) {
+      throw new IllegalArgumentException("maxItemsInAutoPrefix must be 0 (disabled) when minItemsInAutoPrefix is 0");
+    }
+  }
+
   @Override
   public void write(Fields fields) throws IOException {
     //if (DEBUG) System.out.println("\nBTTW.write seg=" + segment);
@@ -329,25 +413,74 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
       if (terms == null) {
         continue;
       }
+      FieldInfo fieldInfo = fieldInfos.fieldInfo(field);
+
+      // First pass to find all prefix terms we should compile into the index:
+      List<PrefixTerm> prefixTerms;
+      if (minItemsInAutoPrefix != 0) {
+        if (fieldInfo.getIndexOptions() != IndexOptions.DOCS) {
+          throw new IllegalStateException("ranges can only be indexed with IndexOptions.DOCS (field: " + fieldInfo.name + ")");
+        }
+        prefixTerms = new AutoPrefixTermsWriter(terms, minItemsInAutoPrefix, maxItemsInAutoPrefix).prefixes;
+        //if (DEBUG) {
+        //  for(PrefixTerm term : prefixTerms) {
+        //    System.out.println("field=" + fieldInfo.name + " PREFIX TERM: " + term);
+        //  }
+        //}
+      } else {
+        prefixTerms = null;
+      }
 
       TermsEnum termsEnum = terms.iterator();
       TermsWriter termsWriter = new TermsWriter(fieldInfos.fieldInfo(field));
+      int prefixTermUpto = 0;
       while (true) {
         BytesRef term = termsEnum.next();
         //if (DEBUG) System.out.println("BTTW: next term " + term);
+
+        // Insert (merge sort) next prefix term(s):
+        if (prefixTerms != null) {
+          while (prefixTermUpto < prefixTerms.size() && (term == null || prefixTerms.get(prefixTermUpto).compareTo(term) <= 0)) {
+            PrefixTerm prefixTerm = prefixTerms.get(prefixTermUpto);
+            //if (DEBUG) System.out.println("seg=" + segment + " field=" + fieldInfo.name + " NOW INSERT prefix=" + prefixTerm);
+            termsWriter.write(prefixTerm.term, getAutoPrefixTermsEnum(terms, prefixTerm), prefixTerm);
+            prefixTermUpto++;
+          }
+        }
 
         if (term == null) {
           break;
         }
 
         //if (DEBUG) System.out.println("write field=" + fieldInfo.name + " term=" + brToString(term));
-        termsWriter.write(term, termsEnum);
+        termsWriter.write(term, termsEnum, null);
       }
+
+      assert prefixTerms == null || prefixTermUpto == prefixTerms.size();
 
       termsWriter.finish();
 
       //if (DEBUG) System.out.println("\nBTTW.write done seg=" + segment + " field=" + field);
     }
+  }
+
+  private TermsEnum getAutoPrefixTermsEnum(Terms terms, final PrefixTerm prefix) throws IOException {
+    assert prefixDocs != null;
+    prefixDocs.clear(0, prefixDocs.length());
+
+    prefixTermsEnum = prefix.getTermsEnum(terms.iterator());
+
+    //System.out.println("BTTW.getAutoPrefixTE: prefix=" + prefix);
+    while (prefixTermsEnum.next() != null) {
+      //System.out.println("    got term=" + prefixTermsEnum.term().utf8ToString());
+      //termCount++;
+      prefixDocsEnum = prefixTermsEnum.postings(prefixDocsEnum, 0);
+      //System.out.println("      " + prefixDocsEnum + " doc=" + prefixDocsEnum.docID());
+      prefixDocs.or(prefixDocsEnum);
+    }
+
+    //System.out.println("  done terms: " + prefixDocs.cardinality() + " doc seen; " + termCount + " terms seen");
+    return prefixFixedBitsTermsEnum;
   }
   
   static long encodeOutput(long fp, boolean hasTerms, boolean isFloor) {
@@ -367,12 +500,16 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
     public final byte[] termBytes;
     // stats + metadata
     public final BlockTermState state;
+    // Non-null if this is an auto-prefix-term:
+    public final PrefixTerm prefixTerm;
+    public PendingTerm other;
 
-    public PendingTerm(BytesRef term, BlockTermState state) {
+    public PendingTerm(BytesRef term, BlockTermState state, PrefixTerm prefixTerm) {
       super(true);
       this.termBytes = new byte[term.length];
       System.arraycopy(term.bytes, term.offset, termBytes, 0, term.length);
       this.state = state;
+      this.prefixTerm = prefixTerm;
     }
 
     @Override
@@ -561,6 +698,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
       // only points to sub-blocks in the terms index so we can avoid seeking
       // to it when we are looking for a term):
       boolean hasTerms = false;
+      boolean hasPrefixTerms = false;
       boolean hasSubBlocks = false;
 
       int start = pending.size()-count;
@@ -601,10 +739,11 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
             // block as soon as we have at least minItemsInBlock.  This is not always best: it often produces
             // a too-small block as the final block:
             boolean isFloor = itemsInBlock < count;
-            newBlocks.add(writeBlock(prefixLength, isFloor, nextFloorLeadLabel, nextBlockStart, i, hasTerms, hasSubBlocks));
+            newBlocks.add(writeBlock(prefixLength, isFloor, nextFloorLeadLabel, nextBlockStart, i, hasTerms, hasPrefixTerms, hasSubBlocks));
 
             hasTerms = false;
             hasSubBlocks = false;
+            hasPrefixTerms = false;
             nextFloorLeadLabel = suffixLeadLabel;
             nextBlockStart = i;
           }
@@ -614,6 +753,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
 
         if (ent.isTerm) {
           hasTerms = true;
+          hasPrefixTerms |= ((PendingTerm) ent).prefixTerm != null;
         } else {
           hasSubBlocks = true;
         }
@@ -623,7 +763,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
       if (nextBlockStart < end) {
         int itemsInBlock = end - nextBlockStart;
         boolean isFloor = itemsInBlock < count;
-        newBlocks.add(writeBlock(prefixLength, isFloor, nextFloorLeadLabel, nextBlockStart, end, hasTerms, hasSubBlocks));
+        newBlocks.add(writeBlock(prefixLength, isFloor, nextFloorLeadLabel, nextBlockStart, end, hasTerms, hasPrefixTerms, hasSubBlocks));
       }
 
       assert newBlocks.isEmpty() == false;
@@ -649,7 +789,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
      *  same prefix, and so we broke it into multiple floor blocks where
      *  we record the starting label of the suffix of each floor block. */
     private PendingBlock writeBlock(int prefixLength, boolean isFloor, int floorLeadLabel, int start, int end,
-                                    boolean hasTerms, boolean hasSubBlocks) throws IOException {
+                                    boolean hasTerms, boolean hasPrefixTerms, boolean hasSubBlocks) throws IOException {
 
       assert end > start;
 
@@ -683,7 +823,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
 
       // We optimize the leaf block case (block has only terms), writing a more
       // compact format in this case:
-      boolean isLeafBlock = hasSubBlocks == false;
+      boolean isLeafBlock = hasSubBlocks == false && hasPrefixTerms == false;
 
       //System.out.println("  isLeaf=" + isLeafBlock);
 
@@ -699,6 +839,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
           assert ent.isTerm: "i=" + i;
 
           PendingTerm term = (PendingTerm) ent;
+          assert term.prefixTerm == null;
 
           assert StringHelper.startsWith(term.termBytes, prefix): "term.term=" + term.termBytes + " prefix=" + prefix;
           BlockTermState state = term.state;
@@ -735,6 +876,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
       } else {
         // Block has at least one prefix term or a sub block:
         subIndices = new ArrayList<>();
+        boolean sawAutoPrefixTerm = false;
         for (int i=start;i<end;i++) {
           PendingEntry ent = pending.get(i);
           if (ent.isTerm) {
@@ -748,6 +890,9 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
             //  System.arraycopy(term.termBytes, prefixLength, suffixBytes.bytes, 0, suffix);
             //  suffixBytes.length = suffix;
             //  System.out.println("      write term suffix=" + brToString(suffixBytes));
+            //  if (term.prefixTerm != null) {
+            //    System.out.println("        ** auto-prefix term: " + term.prefixTerm);
+            //  }
             //}
 
             // For non-leaf block we borrow 1 bit to record
@@ -755,8 +900,33 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
             // it's a prefix term.  Terms cannot be larger than ~32 KB
             // so we won't run out of bits:
 
-            suffixWriter.writeVInt(suffix << 1);
-            suffixWriter.writeBytes(term.termBytes, prefixLength, suffix);
+            if (minItemsInAutoPrefix == 0) {
+              suffixWriter.writeVInt(suffix << 1);
+              suffixWriter.writeBytes(term.termBytes, prefixLength, suffix);
+            } else {
+              code = suffix<<2;
+              int floorLeadEnd = -1;
+              if (term.prefixTerm != null) {
+                assert minItemsInAutoPrefix > 0;
+                sawAutoPrefixTerm = true;
+                PrefixTerm prefixTerm = term.prefixTerm;
+                floorLeadEnd = prefixTerm.floorLeadEnd;
+                assert floorLeadEnd != -1;
+
+                if (prefixTerm.floorLeadStart == -2) {
+                  // Starts with empty string
+                  code |= 2;
+                } else {
+                  code |= 3;
+                }
+              }
+              suffixWriter.writeVInt(code);
+              suffixWriter.writeBytes(term.termBytes, prefixLength, suffix);
+              if (floorLeadEnd != -1) {
+                suffixWriter.writeByte((byte) floorLeadEnd);
+              }
+              assert floorLeadLabel == -1 || (term.termBytes[prefixLength] & 0xff) >= floorLeadLabel;
+            }
 
             // Write term stats, to separate byte[] blob:
             statsWriter.writeVInt(state.docFreq);
@@ -791,8 +961,13 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
             assert suffix > 0;
 
             // For non-leaf block we borrow 1 bit to record
-            // if entry is term or sub-block:f
-            suffixWriter.writeVInt((suffix<<1)|1);
+            // if entry is term or sub-block, and 1 bit (unset here) to
+            // record if it's a prefix term:
+            if (minItemsInAutoPrefix == 0) {
+              suffixWriter.writeVInt((suffix<<1)|1);
+            } else {
+              suffixWriter.writeVInt((suffix<<2)|1);
+            }
             suffixWriter.writeBytes(block.prefix.bytes, prefixLength, suffix);
 
             //if (DEBUG2) {
@@ -810,7 +985,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
           }
         }
 
-        assert subIndices.size() != 0;
+        assert subIndices.size() != 0 || sawAutoPrefixTerm;
       }
 
       // TODO: we could block-write the term suffix pointers;
@@ -854,7 +1029,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
     }
     
     /** Writes one term's worth of postings. */
-    public void write(BytesRef text, TermsEnum termsEnum) throws IOException {
+    public void write(BytesRef text, TermsEnum termsEnum, PrefixTerm prefixTerm) throws IOException {
       /*
       if (DEBUG) {
         int[] tmp = new int[lastTerm.length];
@@ -870,17 +1045,20 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
         assert fieldInfo.getIndexOptions() == IndexOptions.DOCS || state.totalTermFreq >= state.docFreq: "postingsWriter=" + postingsWriter;
         pushTerm(text);
        
-        PendingTerm term = new PendingTerm(text, state);
+        PendingTerm term = new PendingTerm(text, state, prefixTerm);
         pending.add(term);
         //if (DEBUG) System.out.println("    add pending term = " + text + " pending.size()=" + pending.size());
 
-        sumDocFreq += state.docFreq;
-        sumTotalTermFreq += state.totalTermFreq;
-        numTerms++;
-        if (firstPendingTerm == null) {
-          firstPendingTerm = term;
+        if (prefixTerm == null) {
+          // Only increment stats for real terms:
+          sumDocFreq += state.docFreq;
+          sumTotalTermFreq += state.totalTermFreq;
+          numTerms++;
+          if (firstPendingTerm == null) {
+            firstPendingTerm = term;
+          }
+          lastPendingTerm = term;
         }
-        lastPendingTerm = term;
       }
     }
 

@@ -264,7 +264,7 @@ public abstract class FSDirectory extends BaseDirectory {
           continue;
         }
         return new FSIndexOutput(name,
-                                 StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
+                                 StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
       } catch (FileAlreadyExistsException faee) {
         // Retry with next incremented name
       }
@@ -288,20 +288,15 @@ public abstract class FSDirectory extends BaseDirectory {
   }
 
   @Override
-  public void rename(String source, String dest) throws IOException {
+  public void renameFile(String source, String dest) throws IOException {
     ensureOpen();
     if (pendingDeletes.contains(source)) {
       throw new NoSuchFileException("file \"" + source + "\" is pending delete and cannot be moved");
     }
     pendingDeletes.remove(dest);
     Files.move(directory.resolve(source), directory.resolve(dest), StandardCopyOption.ATOMIC_MOVE);
-    maybeDeletePendingFiles();
-  }
-
-  @Override
-  public void syncMetaData() throws IOException {
-    // TODO: to improve listCommits(), IndexFileDeleter could call this after deleting segments_Ns
-    ensureOpen();
+    // TODO: should we move directory fsync to a separate 'syncMetadata' method?
+    // for example, to improve listCommits(), IndexFileDeleter could also call that after deleting segments_Ns
     IOUtils.fsync(directory, true);
     maybeDeletePendingFiles();
   }
@@ -406,7 +401,7 @@ public abstract class FSDirectory extends BaseDirectory {
     static final int CHUNK_SIZE = 8192;
     
     public FSIndexOutput(String name) throws IOException {
-      this(name, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
+      this(name, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
     }
 
     FSIndexOutput(String name, OpenOption... options) throws IOException {

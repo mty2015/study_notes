@@ -40,17 +40,44 @@ final class BooleanWeight extends Weight {
   final BooleanQuery query;
   
   final ArrayList<Weight> weights;
+  final int maxCoord;  // num optional + num required
+  final boolean disableCoord;
   final boolean needsScores;
+  final float coords[];
 
-  BooleanWeight(BooleanQuery query, IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  BooleanWeight(BooleanQuery query, IndexSearcher searcher, boolean needsScores, boolean disableCoord) throws IOException {
     super(query);
     this.query = query;
     this.needsScores = needsScores;
     this.similarity = searcher.getSimilarity(needsScores);
     weights = new ArrayList<>();
+    int i = 0;
+    int maxCoord = 0;
     for (BooleanClause c : query) {
-      Weight w = searcher.createWeight(c.getQuery(), needsScores && c.isScoring(), boost);
+      Weight w = searcher.createWeight(c.getQuery(), needsScores && c.isScoring());
       weights.add(w);
+      if (c.isScoring()) {
+        maxCoord++;
+      }
+      i += 1;
+    }
+    this.maxCoord = maxCoord;
+    
+    // precompute coords (0..N, N).
+    // set disableCoord when its explicit, scores are not needed, no scoring clauses, or the sim doesn't use it.
+    coords = new float[maxCoord+1];
+    Arrays.fill(coords, 1F);
+    coords[0] = 0f;
+    if (maxCoord > 0 && needsScores && disableCoord == false) {
+      // compute coords from the similarity, look for any actual ones.
+      boolean seenActualCoord = false;
+      for (i = 1; i < coords.length; i++) {
+        coords[i] = coord(i, maxCoord);
+        seenActualCoord |= (coords[i] != 1F);
+      }
+      this.disableCoord = seenActualCoord == false;
+    } else {
+      this.disableCoord = true;
     }
   }
 
@@ -66,9 +93,51 @@ final class BooleanWeight extends Weight {
   }
 
   @Override
+  public float getValueForNormalization() throws IOException {
+    float sum = 0.0f;
+    int i = 0;
+    for (BooleanClause clause : query) {
+      // call sumOfSquaredWeights for all clauses in case of side effects
+      float s = weights.get(i).getValueForNormalization();         // sum sub weights
+      if (clause.isScoring()) {
+        // only add to sum for scoring clauses
+        sum += s;
+      }
+      i += 1;
+    }
+
+    return sum ;
+  }
+
+  public float coord(int overlap, int maxOverlap) {
+    if (overlap == 0) {
+      // special case that there are only non-scoring clauses
+      return 0F;
+    } else if (maxOverlap == 1) {
+      // LUCENE-4300: in most cases of maxOverlap=1, BQ rewrites itself away,
+      // so coord() is not applied. But when BQ cannot optimize itself away
+      // for a single clause (minNrShouldMatch, prohibited clauses, etc), it's
+      // important not to apply coord(1,1) for consistency, it might not be 1.0F
+      return 1F;
+    } else {
+      // common case: use the similarity to compute the coord
+      return similarity.coord(overlap, maxOverlap);
+    }
+  }
+
+  @Override
+  public void normalize(float norm, float boost) {
+    for (Weight w : weights) {
+      // normalize all clauses, (even if non-scoring in case of side affects)
+      w.normalize(norm, boost);
+    }
+  }
+
+  @Override
   public Explanation explain(LeafReaderContext context, int doc) throws IOException {
     final int minShouldMatch = query.getMinimumNumberShouldMatch();
     List<Explanation> subs = new ArrayList<>();
+    int coord = 0;
     float sum = 0.0f;
     boolean fail = false;
     int matchCount = 0;
@@ -82,6 +151,7 @@ final class BooleanWeight extends Weight {
         if (c.isScoring()) {
           subs.add(e);
           sum += e.getValue();
+          coord++;
         } else if (c.isRequired()) {
           subs.add(Explanation.match(0f, "match on required clause, product of:",
               Explanation.match(0f, Occur.FILTER + " clause"), e));
@@ -108,7 +178,13 @@ final class BooleanWeight extends Weight {
       return Explanation.noMatch("Failure to match minimum number of optional clauses: " + minShouldMatch, subs);
     } else {
       // we have a match
-      return Explanation.match(sum, "sum of:", subs);
+      Explanation result = Explanation.match(sum, "sum of:", subs);
+      final float coordFactor = disableCoord ? 1.0f : coord(coord, maxCoord);
+      if (coordFactor != 1f) {
+        result = Explanation.match(sum * coordFactor, "product of:",
+            result, Explanation.match(coordFactor, "coord("+coord+"/"+maxCoord+")"));
+      }
+      return result;
     }
   }
 
@@ -168,10 +244,15 @@ final class BooleanWeight extends Weight {
     }
 
     if (optional.size() == 1) {
-      return optional.get(0);
+      BulkScorer opt = optional.get(0);
+      if (!disableCoord && maxCoord > 1) {
+        return new BooleanTopLevelScorers.BoostedBulkScorer(opt, coord(1, maxCoord));
+      } else {
+        return opt;
+      }
     }
 
-    return new BooleanScorer(this, optional, Math.max(1, query.getMinimumNumberShouldMatch()), needsScores);
+    return new BooleanScorer(this, disableCoord, maxCoord, optional, Math.max(1, query.getMinimumNumberShouldMatch()), needsScores);
   }
 
   // Return a BulkScorer for the required clauses only,
@@ -194,8 +275,12 @@ final class BooleanWeight extends Weight {
         // no matches
         return null;
       }
-      if (c.isScoring() == false && needsScores) {
-        scorer = disableScoring(scorer);
+      if (c.isScoring() == false) {
+        if (needsScores) {
+          scorer = disableScoring(scorer);
+        }
+      } else {
+        assert maxCoord == 1;
       }
     }
     return scorer;
@@ -265,7 +350,7 @@ final class BooleanWeight extends Weight {
     if (prohibited.isEmpty()) {
       return positiveScorer;
     } else {
-      Scorer prohibitedScorer = opt(prohibited, 1);
+      Scorer prohibitedScorer = opt(prohibited, 1, true);
       if (prohibitedScorer.twoPhaseIterator() != null) {
         // ReqExclBulkScorer can't deal efficiently with two-phased prohibited clauses
         return null;
@@ -347,33 +432,51 @@ final class BooleanWeight extends Weight {
     
     // pure conjunction
     if (optional.isEmpty()) {
-      return excl(req(required, requiredScoring), prohibited);
+      return excl(req(required, requiredScoring, disableCoord), prohibited);
     }
     
     // pure disjunction
     if (required.isEmpty()) {
-      return excl(opt(optional, minShouldMatch), prohibited);
+      return excl(opt(optional, minShouldMatch, disableCoord), prohibited);
     }
     
     // conjunction-disjunction mix:
-    // we create the required and optional pieces, and then
+    // we create the required and optional pieces with coord disabled, and then
     // combine the two: if minNrShouldMatch > 0, then it's a conjunction: because the
-    // optional side must match. otherwise it's required + optional
+    // optional side must match. otherwise it's required + optional, factoring the
+    // number of optional terms into the coord calculation
     
-    Scorer req = excl(req(required, requiredScoring), prohibited);
-    Scorer opt = opt(optional, minShouldMatch);
+    Scorer req = excl(req(required, requiredScoring, true), prohibited);
+    Scorer opt = opt(optional, minShouldMatch, true);
 
-    if (minShouldMatch > 0) {
-      return new ConjunctionScorer(this, Arrays.asList(req, opt), Arrays.asList(req, opt));
+    // TODO: clean this up: it's horrible
+    if (disableCoord) {
+      if (minShouldMatch > 0) {
+        return new ConjunctionScorer(this, Arrays.asList(req, opt), Arrays.asList(req, opt), 1F);
+      } else {
+        return new ReqOptSumScorer(req, opt);          
+      }
+    } else if (optional.size() == 1) {
+      if (minShouldMatch > 0) {
+        return new ConjunctionScorer(this, Arrays.asList(req, opt), Arrays.asList(req, opt), coord(requiredScoring.size()+1, maxCoord));
+      } else {
+        float coordReq = coord(requiredScoring.size(), maxCoord);
+        float coordBoth = coord(requiredScoring.size() + 1, maxCoord);
+        return new BooleanTopLevelScorers.ReqSingleOptScorer(req, opt, coordReq, coordBoth);
+      }
     } else {
-      return new ReqOptSumScorer(req, opt);          
+      if (minShouldMatch > 0) {
+        return new BooleanTopLevelScorers.CoordinatingConjunctionScorer(this, coords, req, requiredScoring.size(), opt);
+      } else {
+        return new BooleanTopLevelScorers.ReqMultiOptScorer(req, opt, requiredScoring.size(), coords); 
+      }
     }
   }
 
   /** Create a new scorer for the given required clauses. Note that
    *  {@code requiredScoring} is a subset of {@code required} containing
    *  required clauses that should participate in scoring. */
-  private Scorer req(List<Scorer> required, List<Scorer> requiredScoring) {
+  private Scorer req(List<Scorer> required, List<Scorer> requiredScoring, boolean disableCoord) {
     if (required.size() == 1) {
       Scorer req = required.get(0);
 
@@ -397,9 +500,17 @@ final class BooleanWeight extends Weight {
         };
       }
       
-      return req;
+      float boost = 1f;
+      if (disableCoord == false) {
+        boost = coord(1, maxCoord);
+      }
+      if (boost == 1f) {
+        return req;
+      }
+      return new BooleanTopLevelScorers.BoostedScorer(req, boost);
     } else {
-      return new ConjunctionScorer(this, required, requiredScoring);
+      return new ConjunctionScorer(this, required, requiredScoring,
+                                   disableCoord ? 1.0F : coord(requiredScoring.size(), maxCoord));
     }
   }
   
@@ -409,17 +520,34 @@ final class BooleanWeight extends Weight {
     } else if (prohibited.size() == 1) {
       return new ReqExclScorer(main, prohibited.get(0));
     } else {
-      return new ReqExclScorer(main, new DisjunctionSumScorer(this, prohibited, false));
+      float coords[] = new float[prohibited.size()+1];
+      Arrays.fill(coords, 1F);
+      return new ReqExclScorer(main, new DisjunctionSumScorer(this, prohibited, coords, false));
     }
   }
   
-  private Scorer opt(List<Scorer> optional, int minShouldMatch) throws IOException {
+  private Scorer opt(List<Scorer> optional, int minShouldMatch, boolean disableCoord) throws IOException {
     if (optional.size() == 1) {
-      return optional.get(0);
-    } else if (minShouldMatch > 1) {
-      return new MinShouldMatchSumScorer(this, optional, minShouldMatch);
+      Scorer opt = optional.get(0);
+      if (!disableCoord && maxCoord > 1) {
+        return new BooleanTopLevelScorers.BoostedScorer(opt, coord(1, maxCoord));
+      } else {
+        return opt;
+      }
     } else {
-      return new DisjunctionSumScorer(this, optional, needsScores);
+      float coords[];
+      if (disableCoord) {
+        // sneaky: when we do a mixed conjunction/disjunction, we need a fake for the disjunction part.
+        coords = new float[optional.size()+1];
+        Arrays.fill(coords, 1F);
+      } else {
+        coords = this.coords;
+      }
+      if (minShouldMatch > 1) {
+        return new MinShouldMatchSumScorer(this, optional, minShouldMatch, coords);
+      } else {
+        return new DisjunctionSumScorer(this, optional, coords, needsScores);
+      }
     }
   }
 }

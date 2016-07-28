@@ -31,7 +31,7 @@ import org.apache.lucene.util.FixedBitSet;
 
 final class SloppyPhraseScorer extends Scorer {
 
-  private final DocIdSetIterator conjunction;
+  private final ConjunctionDISI conjunction;
   private final PhrasePositions[] phrasePositions;
 
   private float sloppyFreq; //phrase frequency in current doc as computed by phraseFreq().
@@ -70,7 +70,6 @@ final class SloppyPhraseScorer extends Scorer {
       phrasePositions[i] = new PhrasePositions(postings[i].postings, postings[i].position, i, postings[i].terms);
     }
     conjunction = ConjunctionDISI.intersectIterators(Arrays.asList(iterators));
-    assert TwoPhaseIterator.unwrap(conjunction) == null;
     this.matchCost = matchCost;
   }
 

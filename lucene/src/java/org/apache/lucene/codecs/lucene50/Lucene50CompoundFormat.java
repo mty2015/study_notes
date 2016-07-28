@@ -18,17 +18,17 @@ package org.apache.lucene.codecs.lucene50;
 
 
 import java.io.IOException;
+import java.util.Collection;
 
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.CompoundFormat;
 import org.apache.lucene.index.IndexFileNames;
 import org.apache.lucene.index.SegmentInfo;
-import org.apache.lucene.store.ChecksumIndexInput;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
+import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
-import org.apache.lucene.util.StringHelper;
 
 /**
  * Lucene 5.0 compound file format
@@ -76,9 +76,6 @@ public final class Lucene50CompoundFormat extends CompoundFormat {
     String dataFile = IndexFileNames.segmentFileName(si.name, "", DATA_EXTENSION);
     String entriesFile = IndexFileNames.segmentFileName(si.name, "", ENTRIES_EXTENSION);
     
-    byte[] expectedID = si.getId();
-    byte[] id = new byte[StringHelper.ID_LENGTH];
-
     try (IndexOutput data =    dir.createOutput(dataFile, context);
          IndexOutput entries = dir.createOutput(entriesFile, context)) {
       CodecUtil.writeIndexHeader(data,    DATA_CODEC, VERSION_CURRENT, si.getId(), "");
@@ -90,23 +87,8 @@ public final class Lucene50CompoundFormat extends CompoundFormat {
         
         // write bytes for file
         long startOffset = data.getFilePointer();
-        try (ChecksumIndexInput in = dir.openChecksumInput(file, IOContext.READONCE)) {
-
-          // just copies the index header, verifying that its id matches what we expect
-          CodecUtil.verifyAndCopyIndexHeader(in, data, si.getId());
-          
-          // copy all bytes except the footer
-          long numBytesToCopy = in.length() - CodecUtil.footerLength() - in.getFilePointer();
-          data.copyBytes(in, numBytesToCopy);
-
-          // verify footer (checksum) matches for the incoming file we are copying
-          long checksum = CodecUtil.checkFooter(in);
-
-          // this is poached from CodecUtil.writeFooter, but we need to use our own checksum, not data.getChecksum(), but I think
-          // adding a public method to CodecUtil to do that is somewhat dangerous:
-          data.writeInt(CodecUtil.FOOTER_MAGIC);
-          data.writeInt(0);
-          data.writeLong(checksum);
+        try (IndexInput in = dir.openInput(file, IOContext.READONCE)) {
+          data.copyBytes(in, in.length());
         }
         long endOffset = data.getFilePointer();
         

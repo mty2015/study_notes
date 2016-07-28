@@ -176,20 +176,20 @@ public class SpanNearQuery extends SpanQuery implements Cloneable {
   }
 
   @Override
-  public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
     List<SpanWeight> subWeights = new ArrayList<>();
     for (SpanQuery q : clauses) {
-      subWeights.add(q.createWeight(searcher, false, boost));
+      subWeights.add(q.createWeight(searcher, false));
     }
-    return new SpanNearWeight(subWeights, searcher, needsScores ? getTermContexts(subWeights) : null, boost);
+    return new SpanNearWeight(subWeights, searcher, needsScores ? getTermContexts(subWeights) : null);
   }
 
   public class SpanNearWeight extends SpanWeight {
 
     final List<SpanWeight> subWeights;
 
-    public SpanNearWeight(List<SpanWeight> subWeights, IndexSearcher searcher, Map<Term, TermContext> terms, float boost) throws IOException {
-      super(SpanNearQuery.this, searcher, terms, boost);
+    public SpanNearWeight(List<SpanWeight> subWeights, IndexSearcher searcher, Map<Term, TermContext> terms) throws IOException {
+      super(SpanNearQuery.this, searcher, terms);
       this.subWeights = subWeights;
     }
 
@@ -295,14 +295,14 @@ public class SpanNearQuery extends SpanQuery implements Cloneable {
     }
 
     @Override
-    public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
-      return new SpanGapWeight(searcher, boost);
+    public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+      return new SpanGapWeight(searcher);
     }
 
     private class SpanGapWeight extends SpanWeight {
 
-      SpanGapWeight(IndexSearcher searcher, float boost) throws IOException {
-        super(SpanGapQuery.this, searcher, null, boost);
+      SpanGapWeight(IndexSearcher searcher) throws IOException {
+        super(SpanGapQuery.this, searcher, null);
       }
 
       @Override

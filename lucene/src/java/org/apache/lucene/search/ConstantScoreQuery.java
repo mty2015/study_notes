@@ -110,10 +110,10 @@ public final class ConstantScoreQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
-    final Weight innerWeight = searcher.createWeight(query, false, 1f);
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    final Weight innerWeight = searcher.createWeight(query, false);
     if (needsScores) {
-      return new ConstantScoreWeight(this, boost) {
+      return new ConstantScoreWeight(this) {
 
         @Override
         public BulkScorer bulkScorer(LeafReaderContext context) throws IOException {

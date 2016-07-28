@@ -93,11 +93,11 @@ public final class SpanNotQuery extends SpanQuery {
 
 
   @Override
-  public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
-    SpanWeight includeWeight = include.createWeight(searcher, false, boost);
-    SpanWeight excludeWeight = exclude.createWeight(searcher, false, boost);
+  public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    SpanWeight includeWeight = include.createWeight(searcher, false);
+    SpanWeight excludeWeight = exclude.createWeight(searcher, false);
     return new SpanNotWeight(searcher, needsScores ? getTermContexts(includeWeight, excludeWeight) : null,
-                                  includeWeight, excludeWeight, boost);
+                                  includeWeight, excludeWeight);
   }
 
   public class SpanNotWeight extends SpanWeight {
@@ -106,8 +106,8 @@ public final class SpanNotQuery extends SpanQuery {
     final SpanWeight excludeWeight;
 
     public SpanNotWeight(IndexSearcher searcher, Map<Term, TermContext> terms,
-                         SpanWeight includeWeight, SpanWeight excludeWeight, float boost) throws IOException {
-      super(SpanNotQuery.this, searcher, terms, boost);
+                         SpanWeight includeWeight, SpanWeight excludeWeight) throws IOException {
+      super(SpanNotQuery.this, searcher, terms);
       this.includeWeight = includeWeight;
       this.excludeWeight = excludeWeight;
     }

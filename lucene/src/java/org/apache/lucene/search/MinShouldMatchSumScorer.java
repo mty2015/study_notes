@@ -78,6 +78,7 @@ final class MinShouldMatchSumScorer extends Scorer {
   }
 
   final int minShouldMatch;
+  final float[] coord;
 
   // list of scorers which 'lead' the iteration and are currently
   // positioned on 'doc'
@@ -97,7 +98,7 @@ final class MinShouldMatchSumScorer extends Scorer {
   final Collection<ChildScorer> childScorers;
   final long cost;
 
-  MinShouldMatchSumScorer(Weight weight, Collection<Scorer> scorers, int minShouldMatch) {
+  MinShouldMatchSumScorer(Weight weight, Collection<Scorer> scorers, int minShouldMatch, float[] coord) {
     super(weight);
 
     if (minShouldMatch > scorers.size()) {
@@ -108,6 +109,7 @@ final class MinShouldMatchSumScorer extends Scorer {
     }
 
     this.minShouldMatch = minShouldMatch;
+    this.coord = coord;
     this.doc = -1;
 
     head = new DisiPriorityQueue(scorers.size() - minShouldMatch + 1);
@@ -288,7 +290,7 @@ final class MinShouldMatchSumScorer extends Scorer {
     for (DisiWrapper s = lead; s != null; s = s.next) {
       score += s.scorer.score();
     }
-    return (float) score;
+    return coord[freq] * (float) score;
   }
 
   @Override
