@@ -117,6 +117,7 @@ import java.util.Set;
  * 
  * @lucene.experimental
  */
+// 对应segments_N数据信息。
 public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo> {
 
   /** The file format version for the segments_N codec header, since 5.0+ */
@@ -286,17 +287,36 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
   }
 
   /** Read the commit from the provided {@link ChecksumIndexInput}. */
+  // 读取segments_N文件
+  //0000000: 3fd7 6c17 0873 6567 6d65 6e74 7300 0000  ?.l..segments...
+  //0000010: 06df 1d8a 3a05 36fd 7376 8957 4e2d fac0  ....:.6.sv.WN-..
+  //0000020: f001 3106 0100 0000 0000 0000 0004 0000  ..1.............
+  //0000030: 0001 0000 0001 0601 0002 5f30 01df 1d8a  .........._0....
+  //0000040: 3a05 36fd 7376 8957 4e2d fac0 ef08 4c75  :.6.sv.WN-....Lu
+  //0000050: 6365 6e65 3630 ffff ffff ffff ffff 0000  cene60..........
+  //0000060: 0000 ffff ffff ffff ffff ffff ffff ffff  ................
+  //0000070: ffff 0000 0000 0000 c028 93e8 0000 0000  .........(......
+  //0000080: 0000 0000 4537 e3ac 0a                   ....E7...
   public static final SegmentInfos readCommit(Directory directory, ChecksumIndexInput input, long generation) throws IOException {
 
     // NOTE: as long as we want to throw indexformattooold (vs corruptindexexception), we need
     // to read the magic ourselves.
+    // 检验magic code：33fd7 6c17
     int magic = input.readInt();
     if (magic != CodecUtil.CODEC_MAGIC) {
       throw new IndexFormatTooOldException(input, magic, CodecUtil.CODEC_MAGIC, CodecUtil.CODEC_MAGIC);
     }
+    
+    // 检查"segments"字符标识，及version版本要在VERSION_50和VERSION_CURRENT(VERSION_53)之间
+    // 0873 6567 6d65 6e74 73 (其中08指长度,bytes.fromhex('7365676d656e7473').decode('utf-8') == 'segments')
+    // 00 0000 06 (int('00000006', 16) == 6，当前版本为6，即VERSION_53) 
     int format = CodecUtil.checkHeaderNoMagic(input, "segments", VERSION_50, VERSION_CURRENT);
+
+    // 每次update都有唯一的id, 16位长: df 1d8a 3a05 36fd 7376 8957 4e2d fac0 f0
     byte id[] = new byte[StringHelper.ID_LENGTH];
     input.readBytes(id, 0, id.length);
+
+    // 检查当前generation. 01 31(其中01指长度为1，bytes.fromhex('31').decode('utf-8') == '1'指segments_1后缀为1)
     CodecUtil.checkIndexHeaderSuffix(input, Long.toString(generation, Character.MAX_RADIX));
 
     SegmentInfos infos = new SegmentInfos();
@@ -306,14 +326,18 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
     if (format >= VERSION_53) {
       // TODO: in the future (7.0?  sigh) we can use this to throw IndexFormatTooOldException ... or just rely on the
       // minSegmentLuceneVersion check instead:
+      // 06 0100 (06.01.00 , lucene版本号)
       infos.luceneVersion = Version.fromBits(input.readVInt(), input.readVInt(), input.readVInt());
     } else {
       // else compute the min version down below in the for loop
     }
 
+    // 0000 0000 0000 0004 (修改版本号)
     infos.version = input.readLong();
     //System.out.println("READ sis version=" + infos.version);
+    // 0000 0001 （segments_N中的当前N值）
     infos.counter = input.readInt();
+    // 0000 0001  (当前索引有的segment块数量,当前值为1)
     int numSegments = input.readInt();
     if (numSegments < 0) {
       throw new CorruptIndexException("invalid segment count: " + numSegments, input);
@@ -321,8 +345,10 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
 
     if (format >= VERSION_53) {
       if (numSegments > 0) {
+        // 06 0100 (minSegmentLuceneVersion = 6.1.0)
         infos.minSegmentLuceneVersion = Version.fromBits(input.readVInt(), input.readVInt(), input.readVInt());
         if (infos.minSegmentLuceneVersion.onOrAfter(Version.LUCENE_5_0_0) == false) {
+          // 不会进来
           throw new IndexFormatTooOldException(input, "this index contains a too-old segment (version: " + infos.minSegmentLuceneVersion + ")");
         }
       } else {
@@ -335,10 +361,14 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
 
     long totalDocs = 0;
     for (int seg = 0; seg < numSegments; seg++) {
+      // 02 5f30 (读取semgent文件名，bytes.fromhex('5f30').decode('utf-8') == '_0')
       String segName = input.readString();
+
       final byte segmentID[];
+      // 01 (有segmentID)
       byte hasID = input.readByte();
       if (hasID == 1) {
+        // df 1d8a 3a05 36fd 7376 8957 4e2d fac0 ef
         segmentID = new byte[StringHelper.ID_LENGTH];
         input.readBytes(segmentID, 0, segmentID.length);
       } else if (hasID == 0) {
@@ -346,24 +376,37 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
       } else {
         throw new CorruptIndexException("invalid hasID byte, got: " + hasID, input);
       }
+      // 08 4c75 6365 6e65 3630 (bytes.fromhex('4c7563656e653630').decode('utf-8') == 'Lucene60')
+      // codec == org.apache.lucene.codecs.lucene60.Lucene60Codec
       Codec codec = readCodec(input, format < VERSION_53);
+
+      // 读取详细的segment信息
       SegmentInfo info = codec.segmentInfoFormat().read(directory, segName, segmentID, IOContext.READ);
       info.setCodec(codec);
+
       totalDocs += info.maxDoc();
+      // ffff ffff ffff ffff (= -1)
       long delGen = input.readLong();
+      // 0000 0000 (= 0)
       int delCount = input.readInt();
       if (delCount < 0 || delCount > info.maxDoc()) {
         throw new CorruptIndexException("invalid deletion count: " + delCount + " vs maxDoc=" + info.maxDoc(), input);
       }
+      // ffff ffff ffff ffff = -1
       long fieldInfosGen = input.readLong();
+      // ffff ffff ffff ffff = -1
       long dvGen = input.readLong();
+
       SegmentCommitInfo siPerCommit = new SegmentCommitInfo(info, delCount, delGen, fieldInfosGen, dvGen);
       if (format >= VERSION_51) {
+        // 00 没有数据
         siPerCommit.setFieldInfosFiles(input.readSetOfStrings());
       } else {
         siPerCommit.setFieldInfosFiles(Collections.unmodifiableSet(input.readStringSet()));
       }
+
       final Map<Integer,Set<String>> dvUpdateFiles;
+      // 00 0000 00 = 0
       final int numDVFields = input.readInt();
       if (numDVFields == 0) {
         dvUpdateFiles = Collections.emptyMap();
@@ -392,11 +435,13 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
     }
 
     if (format >= VERSION_51) {
+      // 00 = 0,没有数据
       infos.userData = input.readMapOfStrings();
     } else {
       infos.userData = Collections.unmodifiableMap(input.readStringStringMap());
     }
 
+    // c028 93e8 = ~CODE_MAGIC  0000 0000 = 0(algorithmID = 0)
     CodecUtil.checkFooter(input);
 
     // LUCENE-6299: check we are in bounds

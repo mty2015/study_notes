@@ -39,6 +39,7 @@ import org.apache.lucene.util.Version;
  *
  * @lucene.experimental
  */
+// 对应_0.si, _1.si等文件信息，保存每个segment的元数据信息
 public final class SegmentInfo {
   
   // TODO: remove these from this class, for now this is the representation

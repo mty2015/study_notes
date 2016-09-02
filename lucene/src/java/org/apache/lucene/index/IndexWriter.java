@@ -763,10 +763,12 @@ public class IndexWriter implements Closeable, TwoPhaseCommit, Accountable {
    *           IO error
    */
   public IndexWriter(Directory d, IndexWriterConfig conf) throws IOException {
+    // 先确认并等待上次待删除的文件
     if (d instanceof FSDirectory && ((FSDirectory) d).checkPendingDeletions()) {
       throw new IllegalArgumentException("Directory " + d + " still has pending deleted files; cannot initialize IndexWriter");
     }
 
+    // 每个IndexWriterConfig只能绑定一次writer
     conf.setIndexWriter(this); // prevent reuse by other instances
     config = conf;
     infoStream = config.getInfoStream();
@@ -777,16 +779,22 @@ public class IndexWriter implements Closeable, TwoPhaseCommit, Accountable {
     
     boolean success = false;
     try {
+      // 为什么要设置一个原始引用呢？应该是后续会对Directory做处理
       directoryOrig = d;
+      // directory重新指向了一个FilterDirectory（decorator设计模式）
       directory = new LockValidatingDirectoryWrapper(d, writeLock);
 
       // Directory we use for merging, so we can abort running merges, and so
       // merge schedulers can optionally rate-limit per-merge IO:
+      // 用于merge目录，并有io rate limit 功能。要想一个问题，为什么merge要限制速率？
       mergeDirectory = addMergeRateLimiters(directory);
 
       analyzer = config.getAnalyzer();
+      // merge调度器，默认使用的是ConcurrentMergeScheduler，可以使用多线程并发合并merges。MergePolicy是merge的触发策略，
+      // 要明白这两个的区别。
       mergeScheduler = config.getMergeScheduler();
       mergeScheduler.setInfoStream(infoStream);
+      // 数据存储编码，使用Lucene60格式。org.apache.lucene.codecs.lucene60.Lucene60Codec。
       codec = config.getCodec();
 
       bufferedUpdatesStream = new BufferedUpdatesStream(infoStream);
