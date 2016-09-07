@@ -9,7 +9,14 @@
 
 # TF-IDF算法
 
-TF-IDF算法的入门介绍可以参考「Information Retrieval」<sup>[1](#myfootnote1)</sup>第六章，
+TF-IDF算法的入门介绍可以参考「Information Retrieval」<sup>[1](#ir)</sup>第六章。TF-IDF是基于`向量空间模型`来计算。
+
+<p>
+\begin{equation}
+idf_t=\log\frac{N}{df_t}
+\end{equation}
+</p>
+
 
 # BM25算法介绍
 
@@ -21,67 +28,12 @@ TF-IDF算法的入门介绍可以参考「Information Retrieval」<sup>[1](#myfo
 
 
 
-aa  
-aaa  
-aaa  
-aa  
-aa  
-
-aa  a
-
-aa  a
-
-aa  
-aa  
-aa  
-aa  a
-
-aa  
-aa  a
-
-aa  
-aa  
-aa  a
-
-aa  
-aa  
-aa  
-aa  
-aa  
-aa  a
-a
-a
-a
-a
-a
-a
-a
-a
-a
-a
-a
-a
 
 
 
 
 
+** 参考 **
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<a name="myfootnote1">1</a>: Footnote content goes here
+<a name="ir">1</a>: [Information Retrieval](http://nlp.stanford.edu/IR-book/html/htmledition/queries-as-vectors-1.html)，该教材是斯坦福大学信息检索课程，简称IR，是很好的入门学习教材。有中文译本。
 
