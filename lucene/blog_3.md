@@ -78,7 +78,7 @@ idf(t,x) = \sqrt{frequency(t,x)}
 -->
 
 √frequency(t,x)|q|doc0|doc1|doc2
--|-|-|-|-
+---|---|---|---|---
 tony|1|√2|1|0
 name|1|1|0|0
 
