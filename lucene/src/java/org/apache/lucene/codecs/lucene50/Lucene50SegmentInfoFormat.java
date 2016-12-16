@@ -76,6 +76,36 @@ public class Lucene50SegmentInfoFormat extends SegmentInfoFormat {
   public Lucene50SegmentInfoFormat() {
   }
   
+0000000: 3fd7 6c17 134c 7563 656e 6535 3053 6567  ?.l..Lucene50Seg
+0000010: 6d65 6e74 496e 666f 0000 0001 1c3f a7a1  mentInfo.....?..
+0000020: 1113 fa96 6270 42c4 3ba4 39ca 0000 0000  ....bpB.;.9.....
+0000030: 0600 0000 0100 0000 0000 0000 01ff 0a02  ................
+0000040: 6f73 084d 6163 204f 5320 580b 6a61 7661  os.Mac OS X.java
+                       6 0000050: 2e76 656e 646f 7212 4f72 6163 6c65 2043  .vendor.Oracle C
+                         7 0000060: 6f72 706f 7261 7469 6f6e 0c6a 6176 612e  orporation.java.
+                           8 0000070: 7665 7273 696f 6e08 312e 382e 305f 3931  version.1.8.0_91
+                             9 0000080: 0f6a 6176 612e 766d 2e76 6572 7369 6f6e  .java.vm.version
+                              10 0000090: 0932 352e 3931 2d62 3134 0e6c 7563 656e  .25.91-b14.lucen
+                               11 00000a0: 652e 7665 7273 696f 6e05 362e 312e 3007  e.version.6.1.0.
+                                12 00000b0: 6f73 2e61 7263 6806 7838 365f 3634 146a  os.arch.x86_64.j
+                                 13 00000c0: 6176 612e 7275 6e74 696d 652e 7665 7273  ava.runtime.vers
+                                  14 00000d0: 696f 6e0c 312e 382e 305f 3931 2d62 3134  ion.1.8.0_91-b14
+                                   15 00000e0: 0673 6f75 7263 6505 666c 7573 680a 6f73  .source.flush.os
+                                    16 00000f0: 2e76 6572 7369 6f6e 0731 302e 3131 2e34  .version.10.11.4
+                                     17 0000100: 0974 696d 6573 7461 6d70 0d31 3437 3531  .timestamp.14751
+                                      18 0000110: 3038 3136 3232 3932 0c06 5f30 2e64 6969  08162292.._0.dii
+                                       19 0000120: 055f 302e 7369 115f 305f 4c75 6365 6e65  ._0.si._0_Lucene
+                                        20 0000130: 3530 5f30 2e64 6f63 115f 305f 4c75 6365  50_0.doc._0_Luce
+                                         21 0000140: 6e65 3530 5f30 2e74 696d 115f 305f 4c75  ne50_0.tim._0_Lu
+                                          22 0000150: 6365 6e65 3530 5f30 2e70 6f73 065f 302e  cene50_0.pos._0.
+                                           23 0000160: 6e76 6406 5f30 2e66 6478 065f 302e 6469  nvd._0.fdx._0.di
+                                            24 0000170: 6d11 5f30 5f4c 7563 656e 6535 305f 302e  m._0_Lucene50_0.
+                                             25 0000180: 7469 7006 5f30 2e66 6474 065f 302e 6e76  tip._0.fdt._0.nv
+                                              26 0000190: 6d06 5f30 2e66 6e6d 011f 4c75 6365 6e65  m._0.fnm..Lucene
+                                               27 00001a0: 3530 5374 6f72 6564 4669 656c 6473 466f  50StoredFieldsFo
+                                                28 00001b0: 726d 6174 2e6d 6f64 650a 4245 5354 5f53  rmat.mode.BEST_S
+                                                 29 00001c0: 5045 4544 c028 93e8 0000 0000 0000 0000  PEED.(..........
+                                                          30 00001d0: a88c 14ce 0a                             .....
   @Override
   public SegmentInfo read(Directory dir, String segment, byte[] segmentID, IOContext context) throws IOException {
     final String fileName = IndexFileNames.segmentFileName(segment, "", Lucene50SegmentInfoFormat.SI_EXTENSION);

@@ -833,6 +833,7 @@ public class IndexWriter implements Closeable, TwoPhaseCommit, Accountable {
 
         if (config.getIndexCommit() != null) {
           // We cannot both open from a commit point and create:
+          // 如果是create模式，则不能初始一个commit
           if (mode == OpenMode.CREATE) {
             throw new IllegalArgumentException("cannot use IndexWriterConfig.setIndexCommit() with OpenMode.CREATE");
           } else {
@@ -847,6 +848,7 @@ public class IndexWriter implements Closeable, TwoPhaseCommit, Accountable {
         SegmentInfos sis = null;
         try {
           sis = SegmentInfos.readLatestCommit(directory);
+          // 如果存在之前commit信息，则清除所有SegmentCommitInfos。因为是create模式。
           sis.clear();
         } catch (IOException e) {
           // Likely this means it's a fresh directory
@@ -856,6 +858,7 @@ public class IndexWriter implements Closeable, TwoPhaseCommit, Accountable {
         
         segmentInfos = sis;
 
+        // 这里感觉没有必要，因为segmentInfos要么是新建的，要么在前面已经clear了????
         rollbackSegments = segmentInfos.createBackupSegmentInfos();
 
         // Record that we have a change (zero out all

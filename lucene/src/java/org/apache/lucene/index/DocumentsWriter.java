@@ -343,6 +343,10 @@ final class DocumentsWriter implements Closeable, Accountable {
   private boolean preUpdate() throws IOException, AbortingException {
     ensureOpen();
     boolean hasEvents = false;
+    // 在updateDocument前做一些检查动作
+    // flushControl.anyStalledTrheads()判断当前的index速度是否明显大于flush速度，如果是则要先block当前index进程，
+    // 免得内存被耗尽。
+    // flushControl.numQueuedFlushes > 0 判断
     if (flushControl.anyStalledThreads() || flushControl.numQueuedFlushes() > 0) {
       // Help out flushing any queued DWPTs so we can un-stall:
       if (infoStream.isEnabled("DW")) {
