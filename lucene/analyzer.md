@@ -8,7 +8,7 @@
 Notes:
 
 * 自定义扩展分词器，继承自 Analyzer。
-* 便是一般分词逻辑在自定义的 TokenStream 中，由 Analyzer 调用 TokenStream，所以 Analyzer 一般写成匿名实现。
+* 但是一般分词逻辑在自定义的 TokenStream 中，由 Analyzer 调用 TokenStream，所以 Analyzer 一般写成匿名实现。
 * TokenStream是个抽象类，它有两个很重要的抽象子类：Tokenizer 和 TokenFilter
 * Tokenizer 和 TokenFilter 的作用区别。Tokenizer的输入是 Reader，对输入做分词的核心逻辑在这里实现；而 TokenFilter 的输入是 TokenStream，对原始 TokenStream 包装并加强。大家应该看出用的是「装饰器模式」。所以自定义的 Tokenizer 一般用 final 修饰，其它人想加强或者附加功能会以 Tokenizer 为输入。
 * TokenStream 继承自 AttributeSource，而 AttributeSource 是聚合 Attribute 的容器。所以 TokenStream 一般会在通过在分词过程中保存很多信息供外部使用。一般使用的多的是：OffsetAttribute 和 CharTermAttribute，前者保存Term的偏移量，后者保存Term的本身信息。

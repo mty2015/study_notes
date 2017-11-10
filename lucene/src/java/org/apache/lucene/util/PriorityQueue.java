@@ -35,6 +35,7 @@ import java.util.NoSuchElementException;
  *
  * @lucene.internal
  */
+// 优先级队列
 public abstract class PriorityQueue<T> implements Iterable<T> {
   private int size = 0;
   private final int maxSize;
