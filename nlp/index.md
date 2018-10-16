@@ -2,8 +2,7 @@
 
 1. [Introduction](salp/chaptor_01.md)
 1. [Regular Expression](salp/chaptor_02.md)
-1. [Word Transducers](salp/chaptor_02.md)
-1. [Ngrams](salp/chaptor_03.md)
+1. [Word Transducers](salp/chaptor_03.md)
 1. [Ngrams](salp/chaptor_04.md)
 1. [Word Classes And Part-Of-Speech Tagging](salp/chaptor_05.md)
 1. [Hidden Markov And Maximum Entropy Models](salp/chaptor_06.md)
