@@ -1,7 +1,8 @@
 # 结构化文本
 
 ## 关键词提取
-## TF-IDF
+
+### TF-IDF
 TF-IDF算法在很多场景都会用户，比如在IR（信息检索 ）中计算词项权重在文档中的权重用来排序召回文档。可以参考我在[Lucene源码解析系列](https://github.com/hongfuli/study_notes/blob/master/lucene/blog_3.md)文章。
 TF: 与 词项在某个文档中出现的频率 成正比\
 IDF: 与 包含有该词项的所有文档数量 成反比
@@ -69,6 +70,17 @@ class TFIDF(KeywordExtractor):
             return tags
 ```
 
-## TextRank
+### TextRank
+借鉴 [PageRank](https://en.wikipedia.org/wiki/PageRank) 思想，在PageRank 中，网页之间相互引用关系提供重要性证明，在 TextRank 中，词与词相邻出现关系提供重要性证明，从页选出文本中重要的关键词。
 
-## TextRank
+阅读论文：[TextRank: Bringing Order into Texts](https://web.eecs.umich.edu/~mihalcea/papers/mihalcea.emnlp04.pdf)
+
+## FastText
+[FastText](https://fasttext.cc/) 是 Facebook 开源的文本分类和文本词向量相关工程实现。
+
+## 实体识别
+算法上可以参考 jieba 里的基于 HMM(隐马尔科夫模型)。
+
+## Word Embedding
+词嵌入，可以根据数据集学习出一个稠密的词向量模型。这样我们可以得到词与词之前的相似度，或者根据已有词之间的关系，推算出某个词的类比关系。当前比较好的工程实现是 Word2Vec。
+
