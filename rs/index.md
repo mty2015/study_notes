@@ -4,4 +4,5 @@
 
 1. [文本信息挖掘](tj36/chapter01.md)
 1. [基于内容推荐](tj36/chapter02.md)
+1. [近邻推荐](tj36/chapter03.md)
 
