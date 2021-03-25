@@ -10,3 +10,4 @@
 1. [Fluent Python](python/Fluent_Python.md)
 1. [MySQL](mysql/index.md)
 1. [ShardingSphere](shardingsphere/index.md)
+1. [Linear Algebra (线性代数)](linear_algebra/index.md)
