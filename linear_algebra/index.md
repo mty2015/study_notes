@@ -6,3 +6,4 @@ MIT OCW : Linear Algebra
 1. [Multiplication and Inverse Matrices](multiplication_and_inverse_matrices/)
 1. [Factorization into A = LU](factorization_LU/)
 1. [Transposes, Permutations, Vector Spaces](trans_permu_vector/)
+1. [Column Space and Nullspace](column_space/)
