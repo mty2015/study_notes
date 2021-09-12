@@ -8,5 +8,6 @@ MIT OCW : Linear Algebra
 5. [Transposes, Permutations, Vector Spaces](5_trans_permu_vector/)
 6. [Column Space and Nullspace](6_column_space/)
 7. [Ax=0: Pivot variables, special solutions](7_pivot_variables/)
-7. [Ax=b: Row Reduced Form R](8_rrfr/)
-7. [Independence, Basis and Dimension](9_indepence/)
+8. [Ax=b: Row Reduced Form R](8_rrfr/)
+9. [Independence, Basis and Dimension](9_indepence/)
+10. [The Four Fundamental Subspaces](10_four_subspaces/)
