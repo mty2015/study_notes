@@ -12,3 +12,4 @@ MIT OCW : Linear Algebra
 9. [Independence, Basis and Dimension](9_indepence/)
 10. [The Four Fundamental Subspaces](10_four_subspaces/)
 11. [Graphs, Networks, Incidence Matrics](11_graphs_incidence/)
+12. [Orthogonal Vectors and Subspaces](12_orthogonal_vectors/)
