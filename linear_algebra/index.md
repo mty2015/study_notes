@@ -14,3 +14,4 @@ MIT OCW : Linear Algebra
 11. [Graphs, Networks, Incidence Matrics](11_graphs_incidence/)
 12. [Orthogonal Vectors and Subspaces](12_orthogonal_vectors/)
 13. [Projections onto Subspaces](13_projections_subspaces/)
+14. [Projection Matrices and Least Squares](14_projection_and_least_squares/)
