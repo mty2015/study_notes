@@ -15,3 +15,4 @@ MIT OCW : Linear Algebra
 12. [Orthogonal Vectors and Subspaces](12_orthogonal_vectors/)
 13. [Projections onto Subspaces](13_projections_subspaces/)
 14. [Projection Matrices and Least Squares](14_projection_and_least_squares/)
+15. [Orthogonal Matrices and Gram-Schmidt](15_orthogoanl_gram_schmidt/)
