@@ -17,3 +17,4 @@ MIT OCW : Linear Algebra
 14. [Projection Matrices and Least Squares](14_projection_and_least_squares/)
 15. [Orthogonal Matrices and Gram-Schmidt](15_orthogoanl_gram_schmidt/)
 16. [Properties of Determinants](16_properties_of_determinants/)
+17. [Determinant Formulas and Cofactors](17_determinant_formulas_cofactors/)
