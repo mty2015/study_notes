@@ -18,3 +18,4 @@ MIT OCW : Linear Algebra
 15. [Orthogonal Matrices and Gram-Schmidt](15_orthogoanl_gram_schmidt/)
 16. [Properties of Determinants](16_properties_of_determinants/)
 17. [Determinant Formulas and Cofactors](17_determinant_formulas_cofactors/)
+18. [Cramer's Rule, Inverse Matrix and Volume](18_cramer_inverse_volume/)
