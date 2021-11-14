@@ -20,3 +20,4 @@ MIT OCW : Linear Algebra
 17. [Determinant Formulas and Cofactors](17_determinant_formulas_cofactors/)
 18. [Cramer's Rule, Inverse Matrix and Volume](18_cramer_inverse_volume/)
 19. [Eigenvalues and Eigenvectors](19_eigenvalues_eigenvectors/)
+20. [Diagonalization and Powers of A](20_powers_of_matrix/)
