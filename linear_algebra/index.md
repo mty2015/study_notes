@@ -21,3 +21,5 @@ MIT OCW : Linear Algebra
 18. [Cramer's Rule, Inverse Matrix and Volume](18_cramer_inverse_volume/)
 19. [Eigenvalues and Eigenvectors](19_eigenvalues_eigenvectors/)
 20. [Diagonalization and Powers of A](20_powers_of_matrix/)
+21. [Differential Equations and exp(At)](21_differential_equations/)
+22. [Markov Matrices and Fourier Series](22_markov_matrices/)
