@@ -13,3 +13,4 @@
 1. [Linear Algebra (线性代数)](linear_algebra/index.md)
 1. [计算机图形学入门](compute_graphic_guide/index.md)
 1. [云原生模式](cloud_native_patterns/index.md)
+1. [AWS Tutorial](aws_tutorial/index.md)
