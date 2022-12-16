@@ -9,7 +9,7 @@
   <url>http://maven.apache.org</url>
   
   <properties>
-		<org.springframework.version>4.0.4.RELEASE</org.springframework.version>
+		<org.springframework.version>5.2.20.RELEASE</org.springframework.version>
 		<!-- mybatis generator configuration -->
 
 	</properties>
